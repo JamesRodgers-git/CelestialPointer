@@ -383,7 +383,7 @@ class TargetCalculator:
 
     
     def _preload_brightest_satellites(self):
-        """Preload the 100 brightest/visible satellites on startup."""
+        """Preload the brightest/visible satellites and stations on startup."""
         if not self.skyfield_available:
             print("Skyfield not available, skipping preloading of brightest satellites")
             return
@@ -528,7 +528,7 @@ class TargetCalculator:
             print(f"Error loading satellite TLE for {satellite_id}: {e}")
             raise ValueError(f"Failed to load satellite {satellite_id}: {str(e)}")
     
-    def load_satellite_group(self, group_name: str, limit: Optional[int] = None) -> Dict[str, Any]:
+    def load_satellite_group(self, group_name: str, limit: Optional[int] = 200) -> Dict[str, Any]:
         """
         Load a group of satellites from Celestrak.
         

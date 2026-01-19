@@ -113,7 +113,7 @@ BODY_CALIBRATION_FILE = "body_calibration.txt"  # File to save/load calibration
 MAGNETOMETER_CALIBRATION_FILE = "magnetometer_calibration.txt"  # File to save/load magnetometer calibration
 
 # Star Chart Settings
-LOAD_STAR_CHART = False  # Set to False to skip loading star catalog (saves memory and startup time)
+LOAD_STAR_CHART = True  # Set to False to skip loading star catalog (saves memory and startup time)
 
 # Satellite Group Tracking Settings
 # Groups to load from Celestrak for nearest-object tracking
