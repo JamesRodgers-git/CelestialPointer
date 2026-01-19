@@ -1,0 +1,31 @@
+# Celestial Pointer Requirements
+
+# GPIO and Motor Control
+RPi.GPIO>=0.7.1
+RpiMotorLib>=2.0.0
+
+# IMU Support 
+mpu9250-jmdev>=2.0.0
+# mpu9250>=0.1.0
+# mpu6050>=0.1.0
+
+# API Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.4.0
+
+# Astronomy Calculations
+skyfield>=1.45
+numpy>=1.24.0
+
+# HTTP Requests (for ISS, airplane APIs)
+requests>=2.31.0
+
+# Optional: For better IMU support
+# adafruit-circuitpython-mpu9250
+
+# Development/Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+

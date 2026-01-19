@@ -1,0 +1,337 @@
+# Celestial Pointer API Test Examples
+# These are example curl commands to test the API endpoints
+# Replace localhost:8000 with your actual server address if different
+
+# ============================================================================
+# Basic Status and Information
+# ============================================================================
+
+# Get API root information
+curl http://localhost:8000/
+
+# Get current system status
+curl http://localhost:8000/status
+
+# Get laser status
+curl http://localhost:8000/laser/status
+
+
+# ============================================================================
+# Star Targeting
+# ============================================================================
+
+# Target a star by name (Sirius)
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "Sirius"}'
+
+# Target a star by name (Vega)
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "Vega"}'
+
+# Target a star by HIP number (Sirius = HIP32349)
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "HIP32349"}'
+
+# Target a star by HIP number without prefix (Polaris = 11767)
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "11767"}'
+
+# Target other common stars
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "Polaris"}'
+
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "Arcturus"}'
+
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "Capella"}'
+
+
+# ============================================================================
+# Planet and Moon Targeting
+# ============================================================================
+
+# Target the Moon
+curl -X POST http://localhost:8000/target/planet \
+  -H "Content-Type: application/json" \
+  -d '{"planet_name": "moon"}'
+
+# Target Mars
+curl -X POST http://localhost:8000/target/planet \
+  -H "Content-Type: application/json" \
+  -d '{"planet_name": "Mars"}'
+
+# Target Jupiter
+curl -X POST http://localhost:8000/target/planet \
+  -H "Content-Type: application/json" \
+  -d '{"planet_name": "Jupiter"}'
+
+# Target Saturn
+curl -X POST http://localhost:8000/target/planet \
+  -H "Content-Type: application/json" \
+  -d '{"planet_name": "Saturn"}'
+
+# Target Venus
+curl -X POST http://localhost:8000/target/planet \
+  -H "Content-Type: application/json" \
+  -d '{"planet_name": "Venus"}'
+
+
+# ============================================================================
+# Satellite Targeting
+# ============================================================================
+
+# Target the International Space Station (by name)
+curl -X POST http://localhost:8000/target/satellite \
+  -H "Content-Type: application/json" \
+  -d '{"satellite_id": "ISS"}'
+
+# Target ISS by NORAD ID
+curl -X POST http://localhost:8000/target/satellite \
+  -H "Content-Type: application/json" \
+  -d '{"satellite_id": "25544"}'
+
+# ============================================================================
+# Airplane Targeting
+# ============================================================================
+
+# Target an airplane by ICAO code (replace ABC123 with actual ICAO code)
+curl -X POST http://localhost:8000/target/airplane \
+  -H "Content-Type: application/json" \
+  -d '{"icao": "ABC123", "lead_distance": 100.0}'
+
+# Target airplane with custom lead distance
+curl -X POST http://localhost:8000/target/airplane \
+  -H "Content-Type: application/json" \
+  -d '{"icao": "ABC123", "lead_distance": 200.0}'
+
+
+# ============================================================================
+# Orientation Targeting
+# ============================================================================
+
+# Target specific azimuth and elevation (azimuth 180°, elevation 45°)
+curl -X POST http://localhost:8000/target/orientation \
+  -H "Content-Type: application/json" \
+  -d '{"azimuth": 180.0, "elevation": 45.0}'
+
+# Target directly overhead (azimuth 0°, elevation 90°)
+curl -X POST http://localhost:8000/target/orientation \
+  -H "Content-Type: application/json" \
+  -d '{"azimuth": 0.0, "elevation": 90.0}'
+
+# Target horizon (azimuth 90°, elevation 0°)
+curl -X POST http://localhost:8000/target/orientation \
+  -H "Content-Type: application/json" \
+  -d '{"azimuth": 90.0, "elevation": 0.0}'
+
+
+# ============================================================================
+# Laser Control
+# ============================================================================
+
+# Toggle laser on/off
+curl -X POST http://localhost:8000/laser/toggle
+
+# Turn laser on
+curl -X POST http://localhost:8000/laser/toggle \
+  -H "Content-Type: application/json" \
+  -d '{"state": true}'
+
+# Turn laser off
+curl -X POST http://localhost:8000/laser/toggle \
+  -H "Content-Type: application/json" \
+  -d '{"state": false}'
+
+
+# ============================================================================
+# Detargeting
+# ============================================================================
+
+# Stop targeting and turn off laser
+curl -X POST http://localhost:8000/detarget
+
+
+# ============================================================================
+# Default Target Management
+# ============================================================================
+
+# Set default target to a star
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "star",
+    "target_value": "Sirius"
+  }'
+
+# Set default target to a star by HIP number
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "star",
+    "target_value": "HIP32349"
+  }'
+
+# Set default target to a planet
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "planet",
+    "target_value": "Mars"
+  }'
+
+# Set default target to the moon
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "planet",
+    "target_value": "moon"
+  }'
+
+# Set default target to ISS
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "satellite",
+    "target_value": "ISS"
+  }'
+
+# Set default target to specific orientation
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "orientation",
+    "target_value": "orientation",
+    "azimuth": 180.0,
+    "elevation": 45.0
+  }'
+
+# Get current default target
+curl http://localhost:8000/default-target
+
+# Clear default target
+curl -X DELETE http://localhost:8000/default-target
+
+# Aim at the default target
+curl -X POST http://localhost:8000/target/default
+
+
+# ============================================================================
+# Example Test Sequences
+# ============================================================================
+
+# Test sequence 1: Check status, target a star, check status again
+echo "=== Getting initial status ==="
+curl http://localhost:8000/status
+
+echo -e "\n=== Targeting Sirius ==="
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "Sirius"}'
+
+echo -e "\n=== Getting status after targeting ==="
+curl http://localhost:8000/status
+
+echo -e "\n=== Detargeting ==="
+curl -X POST http://localhost:8000/detarget
+
+
+# Test sequence 2: Test laser control
+echo "=== Toggling laser on ==="
+curl -X POST http://localhost:8000/laser/toggle \
+  -H "Content-Type: application/json" \
+  -d '{"state": true}'
+
+echo -e "\n=== Checking laser status ==="
+curl http://localhost:8000/laser/status
+
+echo -e "\n=== Toggling laser off ==="
+curl -X POST http://localhost:8000/laser/toggle \
+  -H "Content-Type: application/json" \
+  -d '{"state": false}'
+
+
+# Test sequence 3: Test default target workflow
+echo "=== Setting default target to Polaris ==="
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "star",
+    "target_value": "Polaris"
+  }'
+
+echo -e "\n=== Getting default target ==="
+curl http://localhost:8000/default-target
+
+echo -e "\n=== Aiming at default target ==="
+curl -X POST http://localhost:8000/target/default
+
+echo -e "\n=== Clearing default target ==="
+curl -X DELETE http://localhost:8000/default-target
+
+
+# ============================================================================
+# Pretty-printed JSON Output (using jq if available)
+# ============================================================================
+
+# Get status with pretty JSON (requires jq)
+curl -s http://localhost:8000/status | jq '.'
+
+# Target star with pretty output
+curl -s -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "Vega"}' | jq '.'
+
+# Get default target with pretty output
+curl -s http://localhost:8000/default-target | jq '.'
+
+
+# ============================================================================
+# Error Testing
+# ============================================================================
+
+# Test invalid star name (should return 404)
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "NonexistentStar"}'
+
+# Test invalid planet name (should return 404)
+curl -X POST http://localhost:8000/target/planet \
+  -H "Content-Type: application/json" \
+  -d '{"planet_name": "Pluto2"}'
+
+# Test invalid orientation (missing elevation, should return 400)
+curl -X POST http://localhost:8000/target/orientation \
+  -H "Content-Type: application/json" \
+  -d '{"azimuth": 180.0}'
+
+# Test targeting default when none is set (should return 404)
+curl -X POST http://localhost:8000/target/default
+
+
+# ============================================================================
+# Notes
+# ============================================================================
+#
+# - Replace localhost:8000 with your actual server address if running remotely
+# - The API server must be running before executing these commands
+# - Some commands may fail if the system is not calibrated
+# - Airplane targeting requires a valid ICAO code from OpenSky Network
+# - Satellite targeting requires internet connection to fetch TLE data
+# - Star/planet positions are calculated in real-time based on your location
+# - Install jq for pretty JSON output: sudo apt-get install jq (Debian/Ubuntu)
+#   or: brew install jq (macOS)
+#
+# Example with remote server:
+#   curl http://192.168.1.100:8000/status
+#
+# Example with authentication (if added):
+#   curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8000/status
+
