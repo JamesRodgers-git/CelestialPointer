@@ -2,13 +2,15 @@
 
 A Raspberry Pi-based device that points a laser at stars, planets, satellites.
 
-<img src="assets/img_1.jpg" alt="Star Pointer rig" width="700">
+<img src="assets/img_1.jpg" alt="Celestial Pointer rig" width="700">
 
 ## Features
 
 - **Dual Motor Control**: Base rotation and laser elevation control
 - **REST API**: Full API for controlling the device
 - **Body Support**: Stars, planets, satellites (ISS)
+
+<img src="assets/img_3.jpg" alt="Star Pointer In action" width="700">
 
 ## Hardware
 
@@ -19,6 +21,9 @@ A Raspberry Pi-based device that points a laser at stars, planets, satellites.
 - Relay module for laser control
 - Calibration button
 - .3mf files for 3d printing included - SPBeta.3mf
+
+<img src="assets/Screenshot 2026-01-18 at 7.52.44 PM.png" alt="Celestial Pointer model" width="400">
+<img src="assets/img_2.jpg" alt="Celestial Pointer at night" width="400">
 
 # Attribution
 3d printed lazy susan base design: https://makerworld.com/en/models/519260-v2-fully-printed-lazy-susan-conical-bearing-180mm?from=search#profileId-435623
@@ -38,20 +43,6 @@ pip3 install -r requirements.txt
 
 ## Usage
 
-### Calibration
-
-First, calibrate the system:
-```bash
-python3 -m celestial_pointer.main --latitude 123.4567 --longitude 123.4567
-
-python3 -m celestial_pointer.main --latitude 123.4567 --longitude 123.4567 --body-calibrate
-
-python3 -m celestial_pointer.main --latitude 123.4567 --longitude 123.4567 --calibrate-magnetometer
-
-```
-
-Calibrate body relative to IMU flag --body-calibrate
-
 ### Running the API Server
 
 ```bash
@@ -67,12 +58,22 @@ The API will be available at `http://localhost:8000`
 - `POST /target/orientation` - Point at specific azimuth/elevation
 - `POST /target/star` - Point at a star by name
 - `POST /target/planet` - Point at a planet by name
-- `POST /target/satellite` - Point at ISS
+- `POST /target/satellite` - Point at Satellite By name or NORAD ID
 - `POST /detarget` - Stop pointing and turn off laser
 - `POST /laser/toggle` - Toggle laser on/off
 - `GET /laser/status` - Get laser status
 
 See API documentation at `http://localhost:8000/docs` when server is running.
+
+Example Auto pointing
+
+```bash
+curl -X POST http://localhost:8000/target/nearest-group -H 'Content-Type: application/json' -d '{}'
+```
+
+<img src="assets/Screenshot 2026-01-18 at 9.43.33 PM.png" alt="Celestial Pointer console output" width="700">
+
+
 
 ## Testing
 
