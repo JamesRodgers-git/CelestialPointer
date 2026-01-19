@@ -43,11 +43,15 @@ pip3 install -r requirements.txt
 
 ## Usage
 
-### Running the API Server
+### Startup
 
 ```bash
 python3 -m celestial_pointer.main --latitude 37.7749 --longitude -122.4194
 ```
+After starting the python script it will boot and turn the laser on and angle it upwards. It will 
+ask for you to point the laser north. This is how it will know it's heading. After pointing the laser
+north press enter and it will start the api.
+
 
 The API will be available at `http://localhost:8000`
 
@@ -65,6 +69,8 @@ The API will be available at `http://localhost:8000`
 
 See API documentation at `http://localhost:8000/docs` when server is running.
 
+## Examples
+
 Example Auto pointing
 
 ```bash
@@ -73,22 +79,40 @@ curl -X POST http://localhost:8000/target/nearest-group -H 'Content-Type: applic
 
 <img src="assets/Screenshot 2026-01-18 at 9.43.33 PM.png" alt="Celestial Pointer console output" width="700">
 
-
-
-## Testing
-
-Run tests:
-```bash
-python3 -m pytest tests/
+Pointing at a star
+```
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "Sirius"}'
 ```
 
-Or run individual test files:
-```bash
-python3 -m unittest tests.test_motor_controller
-python3 -m unittest tests.test_laser_controller
-python3 -m unittest tests.test_calibration
-python3 -m unittest tests.test_target_calculator
 ```
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "HIP32349"}'
+  ```
+
+Pointing at a planet/moon
+```
+curl -X POST http://localhost:8000/target/planet \
+  -H "Content-Type: application/json" \
+  -d '{"planet_name": "moon"}'
+```
+
+Pointing at a satellite
+```
+curl -X POST http://localhost:8000/target/satellite \
+  -H "Content-Type: application/json" \
+  -d '{"satellite_id": "ISS"}'
+```
+
+Pointing at satellite by NORAD ID
+```
+curl -X POST http://localhost:8000/target/satellite \
+  -H "Content-Type: application/json" \
+  -d '{"satellite_id": "25544"}'
+```
+
 
 ## Configuration
 
@@ -101,7 +125,7 @@ Edit `celestial_pointer/config.py` to adjust:
 
 ## Safety Features
 
-- Laser elevation range limiting (default: -10° to 90°)
+- Laser elevation range limiting (default: -50° to 90°)
 - Automatic laser flashing when body is out of range
 - Laser turns off when no body is selected
 - Slow initial movement speed for safety
