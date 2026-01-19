@@ -98,19 +98,6 @@ curl -X POST http://localhost:8000/target/satellite \
   -H "Content-Type: application/json" \
   -d '{"satellite_id": "25544"}'
 
-# ============================================================================
-# Airplane Targeting
-# ============================================================================
-
-# Target an airplane by ICAO code (replace ABC123 with actual ICAO code)
-curl -X POST http://localhost:8000/target/airplane \
-  -H "Content-Type: application/json" \
-  -d '{"icao": "ABC123", "lead_distance": 100.0}'
-
-# Target airplane with custom lead distance
-curl -X POST http://localhost:8000/target/airplane \
-  -H "Content-Type: application/json" \
-  -d '{"icao": "ABC123", "lead_distance": 200.0}'
 
 
 # ============================================================================
@@ -323,7 +310,6 @@ curl -X POST http://localhost:8000/target/default
 # - Replace localhost:8000 with your actual server address if running remotely
 # - The API server must be running before executing these commands
 # - Some commands may fail if the system is not calibrated
-# - Airplane targeting requires a valid ICAO code from OpenSky Network
 # - Satellite targeting requires internet connection to fetch TLE data
 # - Star/planet positions are calculated in real-time based on your location
 # - Install jq for pretty JSON output: sudo apt-get install jq (Debian/Ubuntu)

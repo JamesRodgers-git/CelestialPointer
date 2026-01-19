@@ -23,7 +23,7 @@
 
 ## Overview
 
-The Celestial Pointer API provides control over a laser pointing system that can point at stars, planets, satellites, airplanes, and arbitrary orientations. The system uses stepper motors for base rotation and laser elevation control, with an IMU for orientation sensing.
+The Celestial Pointer API provides control over a laser pointing system that can point at stars, planets, satellites, and arbitrary orientations. The system uses stepper motors for base rotation and laser elevation control, with an IMU for orientation sensing.
 
 ### Base URL
 ```
@@ -211,27 +211,6 @@ Point at a satellite by ID (NORAD ID or name).
 
 **Note:** The satellite must be in the preloaded satellite list. Use `GET /satellites` to see available satellites.
 
-### POST `/target/airplane`
-Point at an airplane by ICAO code.
-
-**Request Body:**
-```json
-{
-  "icao": "ABC123",
-  "lead_distance": 100.0  // optional, meters behind airplane (default: 100.0)
-}
-```
-
-**Response:**
-```json
-{
-  "status": "pointing",
-  "azimuth": 180.5,
-  "elevation": 45.2,
-  "motor1_delta": 5.3,
-  "motor2_delta": -2.1
-}
-```
 
 ### POST `/target/nearest-group`
 Find and track the nearest visible satellite above horizon from configured groups.
@@ -340,11 +319,10 @@ Set a default body that can be activated later.
 **Request Body:**
 ```json
 {
-  "target_type": "satellite",  // "star", "planet", "satellite", "airplane", "orientation"
-  "target_value": "ISS",      // star name, planet name, satellite ID, ICAO code, or "orientation"
+  "target_type": "satellite",  // "star", "planet", "satellite", "orientation"
+  "target_value": "ISS",      // star name, planet name, satellite ID, or "orientation"
   "azimuth": null,             // required for "orientation" type
-  "elevation": null,           // required for "orientation" type
-  "lead_distance": null        // optional, for "airplane" type
+  "elevation": null            // required for "orientation" type
 }
 ```
 
@@ -554,14 +532,6 @@ When `?format=table` is used, returns a plain text formatted table suitable for 
 }
 ```
 
-### AirplaneTarget
-```typescript
-{
-  icao: string;         // ICAO identifier
-  lead_distance?: number; // Optional, meters behind airplane (default: 100.0)
-}
-```
-
 ### LaserToggle
 ```typescript
 {
@@ -572,11 +542,10 @@ When `?format=table` is used, returns a plain text formatted table suitable for 
 ### DefaultTarget
 ```typescript
 {
-  target_type: "star" | "planet" | "satellite" | "airplane" | "orientation";
+  target_type: "star" | "planet" | "satellite" | "orientation";
   target_value: string;
   azimuth?: number;      // Required for "orientation" type
-  elevation?: number;   // Required for "orientation" type
-  lead_distance?: number; // Optional for "airplane" type
+  elevation?: number;    // Required for "orientation" type
 }
 ```
 

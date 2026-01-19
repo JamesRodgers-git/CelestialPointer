@@ -71,9 +71,6 @@ LASER_FLASH_OFF_DURATION = 0.25  # seconds off
 API_HOST = "0.0.0.0"  # Listen on all interfaces
 API_PORT = 8000
 
-# Airplane Tracking Settings
-AIRPLANE_LEAD_DISTANCE = 100.0  # meters behind airplane to point
-
 # IMU Settings
 IMU_SAMPLE_RATE = 100  # Hz
 IMU_CALIBRATION_SAMPLES = 1000  # Number of samples for calibration
@@ -88,12 +85,11 @@ TRACKING_MIN_MOVEMENT_THRESHOLD = 0.15  # Minimum degrees of movement before adj
 
 # Default Target Settings
 # Set a default target that can be activated via API
-# Format: {"type": "star|planet|satellite|airplane|orientation", ...}
+# Format: {"type": "star|planet|satellite|orientation", ...}
 # Examples:
 #   {"type": "star", "name": "Sirius"}
 #   {"type": "planet", "name": "Mars"}
 #   {"type": "satellite", "id": "ISS"}
-#   {"type": "airplane", "icao": "ABC123", "lead_distance": 100.0}
 #   {"type": "orientation", "azimuth": 180.0, "elevation": 45.0}
 DEFAULT_TARGET = {"type": "satellite", "id": "ISS"}
 USE_DEFAULT_TARGET_ON_STARTUP = False  # Set to True to automatically point at default body on startup

@@ -40,11 +40,6 @@ class SatelliteTarget(BaseModel):
     satellite_id: str
 
 
-class AirplaneTarget(BaseModel):
-    """Target specified as airplane ICAO code."""
-    icao: str
-    lead_distance: Optional[float] = 100.0  # meters behind airplane
-
 
 class LaserToggle(BaseModel):
     """Laser toggle request."""
@@ -53,11 +48,10 @@ class LaserToggle(BaseModel):
 
 class DefaultTarget(BaseModel):
     """Default target specification."""
-    target_type: str  # "star", "planet", "satellite", "airplane", "orientation"
-    target_value: str  # star name, planet name, satellite ID, ICAO code, or "orientation"
+    target_type: str  # "star", "planet", "satellite", "orientation"
+    target_value: str  # star name, planet name, satellite ID, or "orientation"
     azimuth: Optional[float] = None  # For orientation type
     elevation: Optional[float] = None  # For orientation type
-    lead_distance: Optional[float] = None  # For airplane type
 
 
 # Global controllers (initialized in main)
@@ -154,13 +148,6 @@ def _calculate_default_target_position(default_target: Dict[str, Any]) -> Option
             position = target_calculator.get_satellite_position(default_target["id"])
             return position
         
-        elif target_type == "airplane":
-            position = target_calculator.get_airplane_position(
-                default_target["icao"],
-                default_target.get("lead_distance", 100.0)
-            )
-            return position
-        
         else:
             return None
     except Exception as e:
@@ -182,9 +169,9 @@ def _is_trackable_target(target: Optional[Dict[str, Any]]) -> bool:
         return False
     
     target_type = target.get("type")
-    # Track moving objects: satellites, airplanes, planets, moon, group targets
+    # Track moving objects: satellites, planets, moon, group targets
     # Don't track static objects: stars, fixed orientations
-    trackable_types = ["satellite", "airplane", "planet", "moon", "group"]
+    trackable_types = ["satellite", "planet", "moon", "group"]
     return target_type in trackable_types
 
 
@@ -219,11 +206,6 @@ def _recalculate_target_position(target: Dict[str, Any]) -> Optional[Tuple[float
         elif target_type == "group":
             # Group targets are tracked as satellites using their ID
             return target_calculator.get_satellite_position(target.get("id"))
-        elif target_type == "airplane":
-            return target_calculator.get_airplane_position(
-                target.get("icao"),
-                target.get("lead_distance", 100.0)
-            )
         elif target_type == "orientation":
             # Fixed orientation, return as-is
             return target.get("azimuth"), target.get("elevation")
@@ -408,25 +390,59 @@ def _point_at_body(azimuth: float, elevation: float, update_laser: bool = True) 
     while motor1_delta < -180:
         motor1_delta += 360
     
-    # Show target name at the top if available
-    target_name = "Unknown"
+    # Show body name at the top if available
+    body_name = "Unknown"
     if current_target is not None:
         if current_target.get("type") == "satellite":
-            target_name = current_target.get("id", "Unknown Satellite")
+            satellite_id = current_target.get("id", "Unknown Satellite")
+            # Try to get NORAD ID and name
+            norad_id = None
+            satellite_name = None
+            
+            # Check if ID is already a NORAD ID (numeric)
+            if satellite_id.isdigit():
+                norad_id = satellite_id
+                # Try to find the name from preloaded satellites
+                if target_calculator is not None:
+                    preloaded = target_calculator.get_preloaded_satellites()
+                    for sat in preloaded:
+                        if sat.get("norad_id") == norad_id:
+                            satellite_name = sat.get("name")
+                            break
+            else:
+                # ID is a name (like "ISS"), try to find NORAD ID
+                if target_calculator is not None:
+                    preloaded = target_calculator.get_preloaded_satellites()
+                    for sat in preloaded:
+                        if sat.get("name", "").upper() == satellite_id.upper() or satellite_id.upper() in sat.get("name", "").upper():
+                            norad_id = sat.get("norad_id")
+                            satellite_name = sat.get("name")
+                            break
+            
+            # Format display with name and NORAD ID
+            if satellite_name and norad_id:
+                body_name = f"{satellite_name} (NORAD {norad_id})"
+            elif norad_id:
+                body_name = f"NORAD {norad_id}"
+            else:
+                body_name = satellite_id
         elif current_target.get("type") == "star":
-            target_name = current_target.get("name", "Unknown Star")
+            body_name = current_target.get("name", "Unknown Star")
         elif current_target.get("type") == "planet":
-            target_name = current_target.get("name", "Unknown Planet")
+            body_name = current_target.get("name", "Unknown Planet")
         elif current_target.get("type") == "moon":
-            target_name = "Moon"
-        elif current_target.get("type") == "airplane":
-            target_name = f"Airplane {current_target.get('icao', 'Unknown')}"
+            body_name = "Moon"
         elif current_target.get("type") == "orientation":
-            target_name = f"Orientation ({azimuth:.1f}°, {elevation:.1f}°)"
+            body_name = f"Orientation ({azimuth:.1f}°, {elevation:.1f}°)"
         elif current_target.get("type") == "group":
-            target_name = f"Group: {current_target.get('satellite_name', 'Unknown')}"
+            satellite_name = current_target.get("satellite_name", "Unknown")
+            norad_id = current_target.get("id")
+            if norad_id:
+                body_name = f"Group: {satellite_name} (NORAD {norad_id})"
+            else:
+                body_name = f"Group: {satellite_name}"
     
-    print(f"TARGET: {target_name}")
+    print(f"BODY: {body_name}")
     print(f"target_motor1_angle: {target_motor1_angle:.2f}°, current_motor1_angle: {current_motor1_angle:.2f}°, motor1_delta: {motor1_delta:.2f}°")
     
 
@@ -837,7 +853,7 @@ def set_default_target(target: DefaultTarget):
     global default_target
     
     # Validate target type
-    valid_types = ["star", "planet", "satellite", "airplane", "orientation"]
+    valid_types = ["star", "planet", "satellite", "orientation"]
     if target.target_type not in valid_types:
         raise HTTPException(
             status_code=400,
@@ -876,14 +892,6 @@ def set_default_target(target: DefaultTarget):
         default_target = {
             "type": "satellite",
             "id": target.target_value
-        }
-    elif target.target_type == "airplane":
-        if not target.target_value:
-            raise HTTPException(status_code=400, detail="target_value (ICAO code) is required")
-        default_target = {
-            "type": "airplane",
-            "icao": target.target_value,
-            "lead_distance": target.lead_distance if target.lead_distance is not None else 100.0
         }
     
     return {
@@ -990,27 +998,6 @@ def target_default():
         }
         return result
     
-    elif target_type == "airplane":
-        if target_calculator is None:
-            raise HTTPException(status_code=500, detail="Target calculator not initialized")
-        position = target_calculator.get_airplane_position(
-            default_target["icao"],
-            default_target.get("lead_distance", 100.0)
-        )
-        if position is None:
-            raise HTTPException(status_code=404, detail=f"Airplane '{default_target['icao']}' not found")
-        azimuth, elevation = position
-        result = _point_at_body(azimuth, elevation)
-        current_target = {
-            "type": "airplane",
-            "icao": default_target["icao"],
-            "lead_distance": default_target.get("lead_distance", 100.0),
-            "azimuth": azimuth,
-            "elevation": elevation,
-            "source": "default"
-        }
-        return result
-    
     else:
         raise HTTPException(status_code=400, detail=f"Unknown target type: {target_type}")
 
@@ -1076,13 +1063,13 @@ def startup_event():
                     **{k: v for k, v in default_target.items() if k != "type"}
                 }
         else:
-            print(f"Warning: Could not calculate position for default target: {default_target}")
+            print(f"Warning: Could not calculate position for default body: {default_target}")
             if default_target.get("type") == "satellite":
                 print("  This may be due to:")
                 print("  - Network connectivity issues")
                 print("  - Celestrak TLE service temporarily unavailable")
                 print("  - Satellite TLE data not yet loaded")
-                print("  The satellite will be retried when tracking starts or when manually targeted.")
+                print("  The satellite will be retried when tracking starts or when manually pointed at.")
 
 
 def run_api():

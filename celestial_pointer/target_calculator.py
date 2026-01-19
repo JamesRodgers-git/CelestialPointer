@@ -391,11 +391,11 @@ class TargetCalculator:
         print("Preloading brightest 100 satellites...")
         # Use "visual" group which contains the brightest/visible satellites
         # "brightest" is not a valid Celestrak group name
-        result = self.load_satellite_group("visual", limit=100)
+        result = self.load_satellite_group("visual")
         if result['loaded'] == 0:
             # Fallback to "stations" if "visual" fails
             print("Visual group failed, trying stations group...")
-            result = self.load_satellite_group("stations", limit=100)
+            result = self.load_satellite_group("stations")
         print(f"Preloaded {result['loaded']} satellites (failed: {result['failed']})")
     
     def get_satellite_position(self, satellite_id: str, time: Optional[datetime] = None) -> Optional[Tuple[float, float]]:
@@ -756,126 +756,6 @@ class TargetCalculator:
         """
         return self.get_satellite_position("ISS", time)
     
-    def get_airplane_position(self, icao: str, lead_distance: float = 100.0) -> Optional[Tuple[float, float]]:
-        """
-        Get position to point at for an airplane (with lead distance).
-        
-        Args:
-            icao: ICAO identifier for the airplane
-            lead_distance: Distance in meters to point behind the airplane
-            
-        Returns:
-            tuple: (azimuth_degrees, elevation_degrees) or None if not found
-        """
-        try:
-            import requests
-            
-            # Use OpenSky Network API
-            response = requests.get(f'https://opensky-network.org/api/states/all?icao24={icao}', timeout=2)
-            data = response.json()
-            
-            if not data.get('states'):
-                return None
-            
-            state = data['states'][0]
-            lat = state[6]
-            lon = state[5]
-            alt = state[7]  # Barometric altitude in meters
-            velocity = state[9]  # Velocity in m/s
-            heading = state[10]  # Heading in degrees
-            
-            # Calculate position behind airplane
-            lead_lat, lead_lon = self._calculate_lead_position(lat, lon, heading, lead_distance)
-            
-            # Calculate azimuth and elevation to lead position
-            return self._calculate_airplane_position(lead_lat, lead_lon, alt)
-        except Exception:
-            return None
-    
-    def _calculate_airplane_position(self, lat: float, lon: float, alt: float) -> Tuple[float, float]:
-        """
-        Calculate azimuth and elevation to an airplane position.
-        
-        Args:
-            lat: Latitude in degrees
-            lon: Longitude in degrees
-            alt: Altitude in meters
-            
-        Returns:
-            tuple: (azimuth_degrees, elevation_degrees)
-        """
-        # Convert to radians
-        lat_rad = math.radians(lat)
-        lon_rad = math.radians(lon)
-        obs_lat_rad = math.radians(self.latitude)
-        obs_lon_rad = math.radians(self.longitude)
-        
-        # Earth radius in meters
-        R_earth = 6371000.0
-        
-        # Calculate distance and angles
-        d_lon = lon_rad - obs_lon_rad
-        
-        # Great circle distance
-        a = (math.sin((lat_rad - obs_lat_rad) / 2)**2 +
-             math.cos(obs_lat_rad) * math.cos(lat_rad) *
-             math.sin(d_lon / 2)**2)
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        distance = R_earth * c
-        
-        # Calculate azimuth
-        y = math.sin(d_lon) * math.cos(lat_rad)
-        x = (math.cos(obs_lat_rad) * math.sin(lat_rad) -
-             math.sin(obs_lat_rad) * math.cos(lat_rad) * math.cos(d_lon))
-        azimuth_rad = math.atan2(y, x)
-        azimuth = math.degrees(azimuth_rad) % 360
-        
-        # Calculate elevation accounting for altitude
-        # Use law of cosines for spherical triangle
-        elevation = math.degrees(math.atan2(alt, distance))
-        
-        return azimuth, elevation
-    
-    def _calculate_lead_position(self, lat: float, lon: float, heading: float, 
-                                 distance: float) -> Tuple[float, float]:
-        """
-        Calculate position behind a moving object.
-        
-        Args:
-            lat: Latitude in degrees
-            lon: Longitude in degrees
-            heading: Heading in degrees (0 = North)
-            distance: Distance in meters
-            
-        Returns:
-            tuple: (lead_lat, lead_lon)
-        """
-        # Earth radius in meters
-        R_earth = 6371000.0
-        
-        # Convert to radians
-        lat_rad = math.radians(lat)
-        lon_rad = math.radians(lon)
-        heading_rad = math.radians(heading)
-        
-        # Calculate offset
-        angular_distance = distance / R_earth
-        
-        # Calculate new position (behind = opposite of heading)
-        back_heading = (heading + 180) % 360
-        back_heading_rad = math.radians(back_heading)
-        
-        lead_lat = math.asin(
-            math.sin(lat_rad) * math.cos(angular_distance) +
-            math.cos(lat_rad) * math.sin(angular_distance) * math.cos(back_heading_rad)
-        )
-        
-        lead_lon = lon_rad + math.atan2(
-            math.sin(back_heading_rad) * math.sin(angular_distance) * math.cos(lat_rad),
-            math.cos(angular_distance) - math.sin(lat_rad) * math.sin(lead_lat)
-        )
-        
-        return math.degrees(lead_lat), math.degrees(lead_lon)
     
     def _calculate_azimuth_elevation_manual(self, ra_hours: float, dec_degrees: float,
                                            time: Optional[datetime] = None) -> Tuple[float, float]:

@@ -18,7 +18,7 @@ pydantic>=2.4.0
 skyfield>=1.45
 numpy>=1.24.0
 
-# HTTP Requests (for ISS, airplane APIs)
+# HTTP Requests (for satellite APIs)
 requests>=2.31.0
 
 # Optional: For better IMU support

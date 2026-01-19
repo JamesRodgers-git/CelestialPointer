@@ -60,19 +60,6 @@ class TestTargetCalculator(unittest.TestCase):
         jd = self.calculator._julian_day(test_date)
         self.assertIsInstance(jd, float)
         self.assertGreater(jd, 2400000)  # Should be a reasonable JD
-    
-    def test_airplane_lead_position(self):
-        """Test airplane lead position calculation."""
-        lat, lon = self.calculator._calculate_lead_position(
-            lat=37.7749,
-            lon=-122.4194,
-            heading=90.0,  # East
-            distance=100.0  # 100 meters
-        )
-        self.assertIsInstance(lat, float)
-        self.assertIsInstance(lon, float)
-        # Lead position should be slightly different
-        self.assertNotAlmostEqual(lat, 37.7749, places=2)
 
 
 if __name__ == '__main__':
