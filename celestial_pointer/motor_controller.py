@@ -387,22 +387,12 @@ class MotorController:
         print("\nThis test will help you calibrate gear ratios accurately.")
         print("It includes a motor 1 calibration process and then tests both motors.")
         
-        # Motor 2 homing setup
-        print("\n" + "-" * 60)
-        print("MOTOR 2 HOMING SETUP")
-        print("-" * 60)
-        print("\nMotor 2 needs to be homed before the test.")
-        print("This will move motor 2 up slowly for a fixed number of steps")
-        print("until it reaches the stop button, then reset its position to 0.")
-        
-        self.home_motor2(laser_controller=laser_controller, slow_mode=True, verbose=True)
-        
         # Motor 1 calibration process
         print("\n" + "-" * 60)
         print("MOTOR 1 CALIBRATION FOR GEAR RATIO")
         print("-" * 60)
         print("\nThis process will help you mark a reference point on the wall")
-        print("for extremely high accuracy gear ratio calibration.")
+        print("for high accuracy gear ratio calibration.")
         print("\nSteps:")
         print("1. Laser will move down 90 degrees from home position")
         print("2. Laser will turn on")
@@ -410,6 +400,9 @@ class MotorController:
         print("4. Motor 1 will rotate 360 degrees")
         print("5. You'll verify the laser returns to the same mark")
         print("6. Laser will turn off and move down another 90 degrees")
+
+        laser_controller.turn_on()
+    
         
         response = input("\nPress Enter to start motor 1 calibration (or 's' to skip)... ")
         if response.lower() != 's':
@@ -418,6 +411,7 @@ class MotorController:
             else:
                 # Step 1: Move laser down 90 degrees from calibration position
                 print("\nStep 1: Moving laser down 90 degrees...")
+                laser_controller.turn_off()
                 self.move_motor2_degrees(90.0, clockwise=None, skip_bounds_check=True)
                 time.sleep(0.5)
                 print("✓ Laser moved down 90 degrees")
@@ -431,6 +425,7 @@ class MotorController:
                 print("\nStep 3: Mark your reference point on the wall.")
                 print("Position the laser where you want to mark, then press Enter to continue...")
                 input()
+                laser_controller.turn_off()
                 
                 # Step 4: Reset motor 1 position to 0 (this is the reference position)
                 print("\nStep 4: Setting motor 1 home position to 0...")
@@ -443,6 +438,8 @@ class MotorController:
                 self.move_motor1_degrees(360.0, clockwise=None)
                 time.sleep(0.5)
                 print("✓ 360 degree rotation complete")
+
+                laser_controller.turn_on()
                 
                 # Step 6: Wait for user to verify and take notes
                 print("\nStep 6: Verify the laser returned to your mark.")
