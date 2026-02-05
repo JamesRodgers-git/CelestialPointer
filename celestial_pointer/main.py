@@ -13,6 +13,7 @@ from .motor_controller import MotorController
 from .laser_controller import LaserController
 from .calibration import CalibrationController
 from .target_calculator import TargetCalculator
+from .display_controller import DisplayController
 from .api import initialize_api, run_api
 import argparse
 
@@ -32,6 +33,10 @@ class CelestialPointer:
             min_elevation: Minimum laser elevation in degrees
         """
         print("Initializing Celestial Pointer...")
+        
+        # Initialize display controller first
+        self.display_controller = DisplayController(i2c_address=0x27)
+        self.display_controller.show_booting()
         
         # Initialize GPIO
         GPIO.setmode(GPIO.BCM)
@@ -108,6 +113,10 @@ class CelestialPointer:
         
         # Turn off laser
         self.laser_controller.turn_off()
+        
+        # Close display
+        if hasattr(self, 'display_controller') and self.display_controller:
+            self.display_controller.close()
         
         # Cleanup GPIO
         GPIO.cleanup()
