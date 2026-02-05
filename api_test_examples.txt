@@ -98,6 +98,34 @@ curl -X POST http://localhost:8000/target/satellite \
   -H "Content-Type: application/json" \
   -d '{"satellite_id": "25544"}'
 
+# Point at nearest visible satellite from groups
+curl -X POST http://localhost:8000/target/nearest-group \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+# Point at nearest visible satellite with custom groups and elevation
+curl -X POST http://localhost:8000/target/nearest-group \
+  -H "Content-Type: application/json" \
+  -d '{
+    "groups": [
+      {
+        "group_name": "stations",
+        "limit": null
+      },
+      {
+        "group_name": "visual",
+        "limit": 50
+      }
+    ],
+    "min_elevation": 10.0
+  }'
+
+# Get list of preloaded satellites (JSON format)
+curl http://localhost:8000/satellites
+
+# Get list of preloaded satellites (formatted table)
+curl http://localhost:8000/satellites?format=table
+
 
 
 # ============================================================================
@@ -139,6 +167,118 @@ curl -X POST http://localhost:8000/laser/toggle \
 
 
 # ============================================================================
+# Default Body Management
+# ============================================================================
+
+# Set default body to a star
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "star",
+    "target_value": "Sirius"
+  }'
+
+# Set default body to a planet
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "planet",
+    "target_value": "Mars"
+  }'
+
+# Set default body to a satellite
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "satellite",
+    "target_value": "ISS"
+  }'
+
+# Set default body to an orientation
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "orientation",
+    "target_value": "orientation",
+    "azimuth": 180.0,
+    "elevation": 45.0
+  }'
+
+# Set default body to nearest group (nearest visible satellite)
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "group"
+  }'
+
+# Set default body to nearest group with custom groups and elevation
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "group",
+    "groups": [
+      {
+        "group_name": "stations",
+        "limit": null
+      },
+      {
+        "group_name": "visual",
+        "limit": 50
+      }
+    ],
+    "min_elevation": 10.0
+  }'
+
+# Get current default body
+curl http://localhost:8000/default-target
+
+# Clear default body
+curl -X DELETE http://localhost:8000/default-target
+
+# Point at the default body
+curl -X POST http://localhost:8000/target/default
+
+
+# ============================================================================
+# Startup Behavior Control
+# ============================================================================
+
+# Get current startup behavior
+curl http://localhost:8000/startup-behavior
+
+# Enable default body on startup
+curl -X POST http://localhost:8000/startup-behavior \
+  -H "Content-Type: application/json" \
+  -d '{
+    "use_default_on_startup": true
+  }'
+
+# Disable default body on startup
+curl -X POST http://localhost:8000/startup-behavior \
+  -H "Content-Type: application/json" \
+  -d '{
+    "use_default_on_startup": false
+  }'
+
+
+# ============================================================================
+# Location Management
+# ============================================================================
+
+# Get current location
+curl http://localhost:8000/location
+
+# Update location (must detarget first if currently targeting)
+curl -X POST http://localhost:8000/location \
+  -H "Content-Type: application/json" \
+  -d '{
+    "latitude": 40.7128,
+    "longitude": -74.0060,
+    "altitude": 0.0
+  }'
+
+
+# ============================================================================
 # ============================================================================
 
 # Stop pointing and turn off laser
@@ -166,6 +306,15 @@ curl -X POST http://localhost:8000/target/orientation \
 
 # Test pointing at default body when none is set (should return 404)
 curl -X POST http://localhost:8000/target/default
+
+# Test updating location while targeting (should return 409)
+# (First point at something, then try to update location)
+curl -X POST http://localhost:8000/target/star \
+  -H "Content-Type: application/json" \
+  -d '{"star_name": "Sirius"}'
+curl -X POST http://localhost:8000/location \
+  -H "Content-Type: application/json" \
+  -d '{"latitude": 40.7128, "longitude": -74.0060}'
 
 
 # ============================================================================
