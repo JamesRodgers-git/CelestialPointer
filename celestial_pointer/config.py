@@ -114,8 +114,8 @@ LOAD_STAR_CHART = True  # Set to False to skip loading star catalog (saves memor
 #   other-comm, satnogs, geodetic, radar, cubesat, other
 # Note: "brightest" is not a valid group - use "visual" for brightest/visible satellites
 SATELLITE_GROUPS = [
-    {"group_name": "stations", "limit": None},  # None = no limit
-    {"group_name": "visual", "limit": None},  # Brightest/visible satellites
+    {"group_name": "stations", "limit": 300},  # None = no limit
+    {"group_name": "visual", "limit": 300},  # Brightest/visible satellites
 ]
 
 # Sticky body duration for group tracking (seconds)
