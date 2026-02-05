@@ -46,9 +46,9 @@ class TargetCalculator:
         """Initialize Skyfield components."""
         try:
 
-            
             self.ts = load.timescale()
             self.eph = load('de421.bsp')  # Planetary ephemeris
+            self.loader = Loader('~/.skyfield-data/')
             
             # Create observer location
             self.observer_topos = Topos(
@@ -64,7 +64,7 @@ class TargetCalculator:
             # Load star catalog (Hipparcos catalog) if enabled
             if self.load_star_chart:
                 try:
-                    with load.open(hipparcos.URL) as f:
+                    with self.loader.open(hipparcos.URL) as f:
                         self.star_catalog = hipparcos.load_dataframe(f)
                     self.stars_loaded = True
                     print("Star catalog loaded successfully.")
