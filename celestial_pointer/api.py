@@ -52,10 +52,12 @@ class LaserToggle(BaseModel):
 
 class DefaultTarget(BaseModel):
     """Default target specification."""
-    target_type: str  # "star", "planet", "satellite", "orientation"
-    target_value: str  # star name, planet name, satellite ID, or "orientation"
+    target_type: str  # "star", "planet", "satellite", "orientation", "group"
+    target_value: Optional[str] = None  # star name, planet name, satellite ID, or "orientation" (not used for "group")
     azimuth: Optional[float] = None  # For orientation type
     elevation: Optional[float] = None  # For orientation type
+    groups: Optional[List[Dict[str, Any]]] = None  # For group type: override default groups from config
+    min_elevation: Optional[float] = None  # For group type: override minimum elevation
 
 
 # Global controllers (initialized in main)
@@ -73,6 +75,15 @@ tracking_lock = threading.Lock()
 tracking_running = False
 group_tracking_active = False  # Whether group tracking mode is active
 sticky_target_time = None  # Time when current target was set (for sticky behavior)
+
+# Random tour state
+random_tour_active = False  # Whether random tour mode is active
+random_tour_thread: Optional[threading.Thread] = None
+random_tour_running = False
+random_tour_lock = threading.Lock()
+
+# Startup behavior
+use_default_on_startup = USE_DEFAULT_TARGET_ON_STARTUP  # Runtime toggleable flag
 
 
 def initialize_api(calc: TargetCalculator, motor: MotorController,
@@ -114,6 +125,81 @@ def initialize_api(calc: TargetCalculator, motor: MotorController,
     print("=" * 60 + "\n")
 
 
+def _update_display():
+    """
+    Update the display based on current target and status.
+    Should be called whenever current_target changes or status changes.
+    """
+    global display_controller, current_target, laser_controller, tracking_enabled
+    
+    if display_controller is None or not display_controller.initialized:
+        return
+    
+    if current_target is None:
+        display_controller.show_ip_address()
+        return
+    
+    # Check if target is out of range
+    elevation = current_target.get("elevation")
+    if elevation is not None and laser_controller is not None:
+        is_valid, _ = laser_controller.check_elevation_range(elevation)
+        if not is_valid:
+            display_controller.show_out_of_range()
+            return
+    
+    # Format target name for display
+    target_type = current_target.get("type")
+    target_name = "Unknown"
+    
+    if target_type == "star":
+        target_name = current_target.get("name", "Unknown Star")
+    elif target_type == "planet":
+        planet_name = current_target.get("name", "Unknown Planet")
+        if planet_name.lower() == "moon":
+            target_name = "Moon"
+        else:
+            target_name = planet_name
+    elif target_type == "satellite":
+        satellite_id = current_target.get("id", "Unknown")
+        satellite_name = current_target.get("satellite_name")
+        
+        # Try to get name from preloaded satellites if not already set
+        if not satellite_name and target_calculator is not None:
+            preloaded = target_calculator.get_preloaded_satellites()
+            for sat in preloaded:
+                if sat.get("norad_id") == str(satellite_id) or sat.get("name", "").upper() == str(satellite_id).upper():
+                    satellite_name = sat.get("norad_id")
+                    break
+        
+        # Format display name (prefer name, fallback to ID)
+        # if satellite_name:
+        #     # Truncate if too long, but try to show name
+        #     if len(satellite_name) <= 16:
+        #         target_name = satellite_name
+        #     else:
+        #         target_name = satellite_name[:13] + "..."
+        # else:
+        target_name = f"Sat {satellite_id}" if len(str(satellite_id)) <= 12 else f"Sat {str(satellite_id)[:9]}..."
+    elif target_type == "group":
+        satellite_name = current_target.get("satellite_name", "Unknown")
+        norad_id = current_target.get("id")
+        
+        if norad_id:
+            target_name = f"Sat {norad_id}" if len(str(norad_id)) <= 12 else f"Sat {str(norad_id)[:9]}..."
+        else:
+            target_name = "Group Track"
+    elif target_type == "orientation":
+        azimuth = current_target.get("azimuth", 0)
+        elevation = current_target.get("elevation", 0)
+        target_name = f"Az:{azimuth:.0f} El:{elevation:.0f}"
+    
+    # Update display with target name
+    # Enable animation if tracking is enabled and target is trackable
+    is_trackable = _is_trackable_target(current_target) if current_target else False
+    animated = tracking_enabled and is_trackable
+    display_controller.show_target(target_name, animated=animated)
+
+
 def _calculate_default_target_position(default_target: Dict[str, Any]) -> Optional[Tuple[float, float]]:
     """
     Calculate azimuth and elevation for a default body specification.
@@ -148,6 +234,22 @@ def _calculate_default_target_position(default_target: Dict[str, Any]) -> Option
         elif target_type == "satellite":
             position = target_calculator.get_satellite_position(default_target["id"])
             return position
+        
+        elif target_type == "group":
+            # Find nearest visible satellite from groups
+            if laser_controller is None:
+                return None
+            
+            groups = default_target.get("groups", SATELLITE_GROUPS)
+            min_elevation = default_target.get("min_elevation")
+            if min_elevation is None:
+                min_elevation = laser_controller.min_elevation if laser_controller else 0.0
+            
+            result = target_calculator.find_nearest_visible_satellite(groups, min_elevation=min_elevation)
+            if result is not None:
+                norad_id, satellite_name, azimuth, elevation = result
+                return (azimuth, elevation)
+            return None
         
         else:
             return None
@@ -234,7 +336,7 @@ def _tracking_worker():
                 # Check if sticky duration has elapsed
                 if sticky_target_time is not None:
                     elapsed = current_time - sticky_target_time
-                    if elapsed >= GROUP_TRACKING_STICKY_DURATION:
+                    if elapsed >= GROUP_TRACKING_STICKY_DURATION or current_target.get("elevation") < laser_controller.min_elevation:
                         # Recheck for a better body (more directly above)
                         try:
                             groups = current_target.get("groups", SATELLITE_GROUPS)
@@ -288,6 +390,9 @@ def _tracking_worker():
                 if not is_valid and elevation < laser_controller.min_elevation:
                     print(f"TRACKING: Body below range - azimuth: {azimuth:.2f}°, elevation: {elevation:.2f}° (min: {laser_controller.min_elevation:.2f}°)")
             
+            # Update display (will show out of range if needed)
+            _update_display()
+            
             # Check if motors are currently moving - skip this update if they are
             if motor_controller is not None and motor_controller.are_motors_moving():
                 # Motors are still moving from previous command, skip this update
@@ -296,7 +401,7 @@ def _tracking_worker():
             
             # Point at updated position (without turning on laser if already on)
             try:
-                _point_at_body(azimuth, elevation, update_laser=False)
+                _point_at_body(azimuth, elevation, update_laser=True)
             except Exception as e:
                 print(f"Error in tracking update: {e}")
         
@@ -349,14 +454,7 @@ def _point_at_body(azimuth: float, elevation: float, update_laser: bool = True) 
     is_valid, clamped_elevation = laser_controller.check_elevation_range(elevation)
     
     if not is_valid:
-        # Body is out of range - flash laser and point down
-        laser_controller.turn_on()
-        laser_controller.flash()
         laser_controller.turn_off()
-        
-        # Point at minimum elevation
-        clamped_elevation = laser_controller.min_elevation
-        
         return {
             "status": "out_of_range",
             "message": f"Body elevation {elevation}° is outside allowed range",
@@ -465,6 +563,9 @@ def _point_at_body(azimuth: float, elevation: float, update_laser: bool = True) 
     if update_laser:
         laser_controller.turn_on()
     
+    # Update display (will show target name or out of range if needed)
+    _update_display()
+    
     return {
         "status": "pointing",
         "azimuth": azimuth,
@@ -523,6 +624,7 @@ def target_orientation(target: OrientationTarget):
             "azimuth": target.azimuth,
             "elevation": target.elevation
         }
+        _update_display()
     
     return result
 
@@ -555,6 +657,7 @@ def target_star(target: StarTarget):
             "azimuth": azimuth,
             "elevation": elevation
         }
+        _update_display()
     
     return result
 
@@ -589,6 +692,7 @@ def target_planet(target: PlanetTarget):
             "azimuth": azimuth,
             "elevation": elevation
         }
+        _update_display()
     
     return result
 
@@ -618,6 +722,7 @@ def target_satellite(target: SatelliteTarget):
             "azimuth": azimuth,
             "elevation": elevation
         }
+        _update_display()
     
     return result
 
@@ -749,10 +854,34 @@ def target_nearest_group(target: GroupTarget):
     result = target_calculator.find_nearest_visible_satellite(groups, min_elevation=min_elevation)
     
     if result is None:
-        raise HTTPException(
-            status_code=404, 
-            detail=f"No visible satellites found above {min_elevation}° elevation in configured groups"
-        )
+        display_controller.show_message(line1="Waiting for satellite...")
+        result = (1, "waiting", 0, -90)
+
+        current_target = {
+            "type": "group",
+            "id": 1,
+            "satellite_name": 1,
+            "groups": groups,
+            "azimuth": azimuth,
+            "elevation": elevation,
+            "min_elevation": min_elevation
+        }
+
+        result_dict = {
+            "status": "pointing",
+            "azimuth": azimuth,
+            "elevation": elevation,
+            "motor1_delta": 0,
+            "motor2_delta": 0,
+            "group_tracking": True,
+            "satellite_id": 1,
+            "sticky_duration": GROUP_TRACKING_STICKY_DURATION
+        }
+
+        _update_display()
+
+        return result_dict
+        
     
     norad_id, satellite_name, azimuth, elevation = result
     
@@ -777,17 +906,25 @@ def target_nearest_group(target: GroupTarget):
         result_dict["group_tracking"] = True
         result_dict["satellite_id"] = norad_id
         result_dict["sticky_duration"] = GROUP_TRACKING_STICKY_DURATION
+        
+        # Update display with target name
+        _update_display()
     
     return result_dict
 
 
 @app.post("/detarget")
 def detarget():
-    """Stop pointing and turn off laser."""
-    global current_target, group_tracking_active, sticky_target_time
+    """Stop pointing, turn off laser, and stop random tour if active."""
+    global current_target, group_tracking_active, sticky_target_time, random_tour_active
     
     if laser_controller is None:
         raise HTTPException(status_code=500, detail="System not initialized")
+    
+    # Stop random tour if active
+    was_random_tour_active = random_tour_active
+    if random_tour_active:
+        _stop_random_tour()
     
     with tracking_lock:
         laser_controller.turn_off()
@@ -795,7 +932,14 @@ def detarget():
         group_tracking_active = False
         sticky_target_time = None
     
-    return {"status": "detargeted", "laser_off": True}
+    # Update display to show ready state
+    _update_display()
+    
+    return {
+        "status": "detargeted", 
+        "laser_off": True,
+        "random_tour_stopped": was_random_tour_active
+    }
 
 
 @app.post("/laser/toggle")
@@ -835,7 +979,7 @@ def set_default_target(target: DefaultTarget):
     global default_target
     
     # Validate target type
-    valid_types = ["star", "planet", "satellite", "orientation"]
+    valid_types = ["star", "planet", "satellite", "orientation", "group"]
     if target.target_type not in valid_types:
         raise HTTPException(
             status_code=400,
@@ -875,6 +1019,15 @@ def set_default_target(target: DefaultTarget):
             "type": "satellite",
             "id": target.target_value
         }
+    elif target.target_type == "group":
+        # For group type, groups and min_elevation are optional (will use config defaults)
+        default_target = {
+            "type": "group"
+        }
+        if target.groups is not None:
+            default_target["groups"] = target.groups
+        if target.min_elevation is not None:
+            default_target["min_elevation"] = target.min_elevation
     
     return {
         "status": "default_target_set",
@@ -902,6 +1055,156 @@ def clear_default_target():
     }
 
 
+class StartupBehavior(BaseModel):
+    """Startup behavior configuration."""
+    use_default_on_startup: bool  # Whether to use default body on startup
+
+
+class LocationUpdate(BaseModel):
+    """Location update request."""
+    latitude: float  # Latitude in degrees (-90 to 90)
+    longitude: float  # Longitude in degrees (-180 to 180)
+    altitude: Optional[float] = None  # Altitude in meters (optional)
+
+
+@app.get("/startup-behavior")
+def get_startup_behavior():
+    """Get the current startup behavior setting."""
+    global use_default_on_startup
+    return {
+        "use_default_on_startup": use_default_on_startup,
+        "has_default_target": default_target is not None,
+        "default_target": default_target
+    }
+
+
+@app.post("/startup-behavior")
+def set_startup_behavior(behavior: StartupBehavior):
+    """Set whether to use default body on startup."""
+    global use_default_on_startup
+    use_default_on_startup = behavior.use_default_on_startup
+    return {
+        "status": "startup_behavior_updated",
+        "use_default_on_startup": use_default_on_startup
+    }
+
+
+def _update_config_file(latitude: float, longitude: float, altitude: Optional[float] = None):
+    """
+    Update latitude and longitude in config.py file.
+    
+    Args:
+        latitude: New latitude value
+        longitude: New longitude value
+        altitude: New altitude value (optional)
+    """
+    # config.py is in the same directory as api.py
+    config_path = os.path.join(os.path.dirname(__file__), "config.py")
+    
+    try:
+        with open(config_path, 'r') as f:
+            content = f.read()
+        
+        # Update latitude
+        content = re.sub(
+            r'(OBSERVER_LATITUDE\s*=\s*)[-+]?\d*\.?\d+',
+            f'\\g<1>{latitude}',
+            content
+        )
+        
+        # Update longitude
+        content = re.sub(
+            r'(OBSERVER_LONGITUDE\s*=\s*)[-+]?\d*\.?\d+',
+            f'\\g<1>{longitude}',
+            content
+        )
+        
+        # Update altitude if provided
+        if altitude is not None:
+            content = re.sub(
+                r'(OBSERVER_ALTITUDE\s*=\s*)[-+]?\d*\.?\d+',
+                f'\\g<1>{altitude}',
+                content
+            )
+        
+        with open(config_path, 'w') as f:
+            f.write(content)
+        
+        return True
+    except Exception as e:
+        print(f"Error updating config file: {e}")
+        return False
+
+
+@app.post("/location")
+def update_location(location: LocationUpdate):
+    """Update observer location (latitude, longitude, and optionally altitude)."""
+    global target_calculator, current_target
+    
+    # Validate latitude and longitude ranges
+    if not -90 <= location.latitude <= 90:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Latitude must be between -90 and 90 degrees, got {location.latitude}"
+        )
+    
+    if not -180 <= location.longitude <= 180:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Longitude must be between -180 and 180 degrees, got {location.longitude}"
+        )
+    
+    # Check if device is currently targeting something
+    with tracking_lock:
+        if current_target is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot update location while device is targeting a body. Please detarget first."
+            )
+    
+    if target_calculator is None:
+        raise HTTPException(status_code=500, detail="Target calculator not initialized")
+    
+    # Update location in target calculator
+    try:
+        target_calculator.update_location(
+            location.latitude,
+            location.longitude,
+            location.altitude
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error updating location in target calculator: {str(e)}"
+        )
+    
+    # Save to config file
+    if not _update_config_file(location.latitude, location.longitude, location.altitude):
+        # Location was updated in calculator but config save failed
+        # This is not critical, but we should warn
+        print(f"Warning: Location updated in calculator but failed to save to config file")
+    
+    return {
+        "status": "location_updated",
+        "latitude": location.latitude,
+        "longitude": location.longitude,
+        "altitude": location.altitude if location.altitude is not None else target_calculator.altitude
+    }
+
+
+@app.get("/location")
+def get_location():
+    """Get current observer location."""
+    if target_calculator is None:
+        raise HTTPException(status_code=500, detail="Target calculator not initialized")
+    
+    return {
+        "latitude": target_calculator.latitude,
+        "longitude": target_calculator.longitude,
+        "altitude": target_calculator.altitude
+    }
+
+
 @app.post("/target/default")
 def target_default():
     """Point at the default body."""
@@ -921,6 +1224,7 @@ def target_default():
             "elevation": default_target["elevation"],
             "source": "default"
         }
+        _update_display()
         return result
     
     elif target_type == "star":
@@ -938,6 +1242,7 @@ def target_default():
             "elevation": elevation,
             "source": "default"
         }
+        _update_display()
         return result
     
     elif target_type == "planet":
@@ -961,6 +1266,7 @@ def target_default():
             "elevation": elevation,
             "source": "default"
         }
+        _update_display()
         return result
     
     elif target_type == "satellite":
@@ -978,7 +1284,63 @@ def target_default():
             "elevation": elevation,
             "source": "default"
         }
+        _update_display()
         return result
+    
+    elif target_type == "group":
+        # Use the same logic as /target/nearest-group endpoint
+        global group_tracking_active, sticky_target_time
+        
+        if target_calculator is None:
+            raise HTTPException(status_code=500, detail="Target calculator not initialized")
+        
+        if laser_controller is None:
+            raise HTTPException(status_code=500, detail="Laser controller not initialized")
+        
+        # Use provided groups or default from config
+        groups = default_target.get("groups", SATELLITE_GROUPS)
+        min_elevation = default_target.get("min_elevation")
+        if min_elevation is None:
+            min_elevation = laser_controller.min_elevation if laser_controller else 0.0
+        
+        # Find nearest visible satellite
+        result = target_calculator.find_nearest_visible_satellite(groups, min_elevation=min_elevation)
+        
+        if result is None:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"No visible satellites found above {min_elevation}° elevation in configured groups"
+            )
+        
+        norad_id, satellite_name, azimuth, elevation = result
+        
+        with tracking_lock:
+            # Enable group tracking mode
+            group_tracking_active = True
+            sticky_target_time = time.time()
+            
+            # Set current_target before calling _point_at_body so the body name is available
+            current_target = {
+                "type": "group",
+                "id": norad_id,
+                "satellite_name": satellite_name,
+                "groups": groups,
+                "azimuth": azimuth,
+                "elevation": elevation,
+                "min_elevation": min_elevation,
+                "source": "default"
+            }
+            
+            result_dict = _point_at_body(azimuth, elevation)
+            
+            result_dict["group_tracking"] = True
+            result_dict["satellite_id"] = norad_id
+            result_dict["sticky_duration"] = GROUP_TRACKING_STICKY_DURATION
+            
+            # Update display with target name
+            _update_display()
+        
+        return result_dict
     
     else:
         raise HTTPException(status_code=400, detail=f"Unknown target type: {target_type}")
@@ -1020,38 +1382,359 @@ def get_tracking_status():
     }
 
 
+def _get_visible_targets() -> List[Dict[str, Any]]:
+    """
+    Get list of visible targets (planets, moon, Polaris, ISS) that are above horizon.
+    
+    Returns:
+        list: List of target dictionaries with 'type', 'name', 'id' (if applicable)
+    """
+    if target_calculator is None:
+        return []
+    
+    visible_targets = []
+    
+    # List of planets to check
+    planets = ["Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"]
+    
+    # Check each planet
+    for planet_name in planets:
+        try:
+            position = target_calculator.get_planet_position(planet_name)
+            if position is not None:
+                azimuth, elevation = position
+                # Only include if above horizon (elevation > 0)
+                if elevation > 0:
+                    visible_targets.append({
+                        "type": "planet",
+                        "name": planet_name,
+                        "azimuth": azimuth,
+                        "elevation": elevation
+                    })
+        except Exception as e:
+            print(f"Error checking planet {planet_name}: {e}")
+            continue
+    
+    # Check Moon
+    try:
+        moon_position = target_calculator.get_moon_position()
+        if moon_position is not None:
+            azimuth, elevation = moon_position
+            if elevation > 0:
+                visible_targets.append({
+                    "type": "moon",
+                    "name": "Moon",
+                    "azimuth": azimuth,
+                    "elevation": elevation
+                })
+    except Exception as e:
+        print(f"Error checking Moon: {e}")
+    
+    # Check Polaris (North Star)
+    try:
+        polaris_position = target_calculator.get_star_position("Polaris")
+        if polaris_position is not None:
+            azimuth, elevation = polaris_position
+            if elevation > 0:
+                visible_targets.append({
+                    "type": "star",
+                    "name": "Polaris",
+                    "azimuth": azimuth,
+                    "elevation": elevation
+                })
+    except Exception as e:
+        print(f"Error checking Polaris: {e}")
+    
+    # Check ISS
+    try:
+        iss_position = target_calculator.get_iss_position()
+        if iss_position is not None:
+            azimuth, elevation = iss_position
+            if elevation > 0:
+                visible_targets.append({
+                    "type": "satellite",
+                    "name": "ISS",
+                    "id": "ISS",
+                    "azimuth": azimuth,
+                    "elevation": elevation
+                })
+    except Exception as e:
+        print(f"Error checking ISS: {e}")
+    
+    return visible_targets
+
+
+def _random_tour_worker():
+    """Background thread that randomly selects and changes targets."""
+    global random_tour_running, current_target, group_tracking_active, sticky_target_time
+    
+    while random_tour_running:
+        try:
+            # Get visible targets
+            visible_targets = _get_visible_targets()
+            
+            if not visible_targets:
+                print("RANDOM TOUR: No visible targets found, waiting...")
+                time.sleep(GROUP_TRACKING_STICKY_DURATION)
+                continue
+            
+            # Randomly select a target
+            selected_target = random.choice(visible_targets)
+            
+            target_type = selected_target["type"]
+            target_name = selected_target["name"]
+            azimuth = selected_target["azimuth"]
+            elevation = selected_target["elevation"]
+            
+            print(f"RANDOM TOUR: Selected {target_name} ({target_type}) at {azimuth:.2f}°, {elevation:.2f}°")
+            
+            # Point at the selected target
+            with tracking_lock:
+                group_tracking_active = False  # Disable group tracking in random tour mode
+                
+                # Set current_target based on type
+                if target_type == "planet":
+                    current_target = {
+                        "type": "planet",
+                        "name": target_name,
+                        "azimuth": azimuth,
+                        "elevation": elevation,
+                        "source": "random_tour"
+                    }
+                elif target_type == "moon":
+                    current_target = {
+                        "type": "moon",
+                        "name": "Moon",
+                        "azimuth": azimuth,
+                        "elevation": elevation,
+                        "source": "random_tour"
+                    }
+                elif target_type == "star":
+                    current_target = {
+                        "type": "star",
+                        "name": target_name,
+                        "azimuth": azimuth,
+                        "elevation": elevation,
+                        "source": "random_tour"
+                    }
+                elif target_type == "satellite":
+                    current_target = {
+                        "type": "satellite",
+                        "id": selected_target.get("id", "ISS"),
+                        "name": target_name,
+                        "satellite_name": target_name,  # For display compatibility
+                        "azimuth": azimuth,
+                        "elevation": elevation,
+                        "source": "random_tour"
+                    }
+                
+                # Point at the target
+                try:
+                    _point_at_body(azimuth, elevation)
+                    # Update display with target name
+                    _update_display()
+                    print(f"RANDOM TOUR: Now pointing at {target_name}")
+                except Exception as e:
+                    print(f"RANDOM TOUR: Error pointing at {target_name}: {e}")
+            
+            # Wait for sticky duration before changing to next target
+            time.sleep(GROUP_TRACKING_STICKY_DURATION)
+            
+        except Exception as e:
+            print(f"Error in random tour worker: {e}")
+            time.sleep(5.0)  # Wait a bit before retrying
+
+
+def _start_random_tour():
+    """Start the random tour thread."""
+    global random_tour_thread, random_tour_running, random_tour_active
+    
+    if random_tour_thread is not None and random_tour_thread.is_alive():
+        return  # Already running
+    
+    random_tour_active = True
+    random_tour_running = True
+    random_tour_thread = threading.Thread(target=_random_tour_worker, daemon=True)
+    random_tour_thread.start()
+    print("Random tour started")
+
+
+def _stop_random_tour():
+    """Stop the random tour thread."""
+    global random_tour_running, random_tour_thread, random_tour_active
+    
+    random_tour_active = False
+    random_tour_running = False
+    if random_tour_thread is not None:
+        random_tour_thread.join(timeout=2.0)
+        random_tour_thread = None
+    print("Random tour stopped")
+
+
+@app.post("/target/random-tour")
+def start_random_tour():
+    """Start random tour mode - randomly cycles through visible planets, moon, Polaris, and ISS.
+    
+    Changes targets every GROUP_TRACKING_STICKY_DURATION seconds.
+    """
+    global random_tour_active
+    
+    if target_calculator is None:
+        raise HTTPException(status_code=500, detail="Target calculator not initialized")
+    
+    if random_tour_active:
+        return {
+            "status": "already_running",
+            "message": "Random tour is already active"
+        }
+    
+    # Get visible targets first to verify we have options
+    visible_targets = _get_visible_targets()
+    if not visible_targets:
+        raise HTTPException(
+            status_code=404,
+            detail="No visible targets found. Cannot start random tour."
+        )
+    
+    # Start the random tour
+    _start_random_tour()
+    
+    return {
+        "status": "random_tour_started",
+        "visible_targets_count": len(visible_targets),
+        "sticky_duration": GROUP_TRACKING_STICKY_DURATION,
+        "targets": [{"name": t["name"], "type": t["type"]} for t in visible_targets]
+    }
+
+
+@app.post("/target/random-tour/stop")
+def stop_random_tour():
+    """Stop random tour mode."""
+    global random_tour_active
+    
+    if not random_tour_active:
+        return {
+            "status": "not_running",
+            "message": "Random tour is not active"
+        }
+    
+    _stop_random_tour()
+    
+    return {
+        "status": "random_tour_stopped"
+    }
+
+
+@app.get("/target/random-tour/status")
+def get_random_tour_status():
+    """Get random tour status."""
+    visible_targets = _get_visible_targets() if target_calculator is not None else []
+    
+    return {
+        "active": random_tour_active,
+        "visible_targets_count": len(visible_targets),
+        "sticky_duration": GROUP_TRACKING_STICKY_DURATION,
+        "visible_targets": [{"name": t["name"], "type": t["type"]} for t in visible_targets]
+    }
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    """Run when API server is shutting down."""
+    global laser_controller, display_controller
+    
+    print("API server shutting down, cleaning up...")
+    
+    # Turn off laser
+    if laser_controller is not None:
+        try:
+            laser_controller.turn_off()
+            print("Laser turned off")
+        except Exception as e:
+            print(f"Error turning off laser: {e}")
+    
+    # Clear and close display
+    if display_controller is not None:
+        try:
+            display_controller.clear()
+            display_controller.close()
+            print("Display cleaned up")
+        except Exception as e:
+            print(f"Error cleaning up display: {e}")
+    
+    print("Shutdown cleanup complete")
+
+
 @app.on_event("startup")
 def startup_event():
     """Run after API server starts listening."""
-    global default_target, current_target
+    global default_target, current_target, use_default_on_startup, group_tracking_active, sticky_target_time
     
     # Small delay to ensure server is fully ready
     time.sleep(2.5)
     
     # Point at default body after server is ready (if enabled)
-    if USE_DEFAULT_TARGET_ON_STARTUP and default_target is not None:
-        position = _calculate_default_target_position(default_target)
-        if position is not None:
-            azimuth, elevation = position
-            print(f"Pointing at default body after server startup: {default_target.get('type', 'unknown')} at {azimuth:.2f}°, {elevation:.2f}°")
-            _point_at_body(azimuth, elevation)
-            # Set current_target for tracking
-            with tracking_lock:
-                current_target = {
-                    "type": default_target.get("type"),
-                    "azimuth": azimuth,
-                    "elevation": elevation,
-                    "source": "default_startup",
-                    **{k: v for k, v in default_target.items() if k != "type"}
-                }
+    if use_default_on_startup and default_target is not None:
+        target_type = default_target.get("type")
+        
+        if target_type == "group":
+            # For group type, use the same logic as /target/nearest-group
+            if target_calculator is None or laser_controller is None:
+                print("Warning: Target calculator or laser controller not initialized, cannot point at default group")
+                return
+            
+            groups = default_target.get("groups", SATELLITE_GROUPS)
+            min_elevation = default_target.get("min_elevation")
+            if min_elevation is None:
+                min_elevation = laser_controller.min_elevation if laser_controller else 0.0
+            
+            result = target_calculator.find_nearest_visible_satellite(groups, min_elevation=min_elevation)
+            if result is not None:
+                norad_id, satellite_name, azimuth, elevation = result
+                print(f"Pointing at default group body after server startup: {satellite_name} (NORAD {norad_id}) at {azimuth:.2f}°, {elevation:.2f}°")
+                _point_at_body(azimuth, elevation)
+                # Set current_target for tracking
+                with tracking_lock:
+                    group_tracking_active = True
+                    sticky_target_time = time.time()
+                    current_target = {
+                        "type": "group",
+                        "id": norad_id,
+                        "satellite_name": satellite_name,
+                        "groups": groups,
+                        "azimuth": azimuth,
+                        "elevation": elevation,
+                        "min_elevation": min_elevation,
+                        "source": "default_startup"
+                    }
+                    _update_display()
+            else:
+                print(f"Warning: No visible satellites found for default group body")
         else:
-            print(f"Warning: Could not calculate position for default body: {default_target}")
-            if default_target.get("type") == "satellite":
-                print("  This may be due to:")
-                print("  - Network connectivity issues")
-                print("  - Celestrak TLE service temporarily unavailable")
-                print("  - Satellite TLE data not yet loaded")
-                print("  The satellite will be retried when tracking starts or when manually pointed at.")
+            # For other types, use the existing calculation
+            position = _calculate_default_target_position(default_target)
+            if position is not None:
+                azimuth, elevation = position
+                print(f"Pointing at default body after server startup: {target_type} at {azimuth:.2f}°, {elevation:.2f}°")
+                _point_at_body(azimuth, elevation)
+                # Set current_target for tracking
+                with tracking_lock:
+                    current_target = {
+                        "type": target_type,
+                        "azimuth": azimuth,
+                        "elevation": elevation,
+                        "source": "default_startup",
+                        **{k: v for k, v in default_target.items() if k != "type"}
+                    }
+                    _update_display()
+            else:
+                print(f"Warning: Could not calculate position for default body: {default_target}")
+                if target_type == "satellite":
+                    print("  This may be due to:")
+                    print("  - Network connectivity issues")
+                    print("  - Celestrak TLE service temporarily unavailable")
+                    print("  - Satellite TLE data not yet loaded")
+                    print("  The satellite will be retried when tracking starts or when manually pointed at.")
 
 
 def run_api():
@@ -1064,4 +1747,6 @@ def run_api():
     finally:
         # Stop tracking thread on shutdown
         _stop_tracking_thread()
+        # Stop random tour thread on shutdown
+        _stop_random_tour()
 
