@@ -348,8 +348,8 @@ class MotorController:
             if verbose:
                 print(f"\nBefore reset: motor2_position = {self.get_motor2_position()} steps, angle = {self.get_motor2_angle():.2f}°")
             
-            # move backwards 5 steps to release pressure on the button
-            self.move_motor2_degrees(5.0, clockwise=True, skip_bounds_check=True)
+            # move backwards MOTOR2_GEAR_OFFSET_STEPS steps to release pressure on the stop
+            self.move_motor2_degrees(MOTOR2_GEAR_OFFSET_STEPS, clockwise=True, skip_bounds_check=True)
 
             self.reset_motor2_position()
             
