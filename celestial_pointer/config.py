@@ -91,7 +91,7 @@ TRACKING_MIN_MOVEMENT_THRESHOLD = 0.15  # Minimum degrees of movement before adj
 #   {"type": "planet", "name": "Mars"}
 #   {"type": "satellite", "id": "ISS"}
 #   {"type": "orientation", "azimuth": 180.0, "elevation": 45.0}
-DEFAULT_TARGET = {"type": "satellite", "id": "ISS"}
+DEFAULT_TARGET = {"type": "group", "id": ""}
 USE_DEFAULT_TARGET_ON_STARTUP = False  # Set to True to automatically point at default body on startup
 
 # Set default target to a planet
