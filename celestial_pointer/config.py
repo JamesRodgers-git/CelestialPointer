@@ -30,13 +30,6 @@ BUTTON_PIN = 14
 MOTOR_STEPS_PER_REVOLUTION = 512  # Steps per external motor shaft revolution
 MOTOR_DEGREES_PER_STEP = 360.0 / MOTOR_STEPS_PER_REVOLUTION  # 0.703125 degrees per step
 
-# Gear Specifications
-GEAR_MODULE = 1.5  # mm
-GEAR_BACKLASH = 0.2  # mm
-GEAR_PRESSURE_ANGLE = 20  # degrees
-MOTOR_PINION_TEETH = 20
-LASER_GEAR_TEETH = 14
-
 # Motor Gear Ratios
 # Gear ratio = output_rotation / motor_shaft_rotation
 # For example: if motor rotates 2x for 1x output rotation, ratio = 0.5
