@@ -8,8 +8,10 @@ from datetime import datetime
 from typing import Dict, Optional, Tuple, List, Any
 import warnings
 from skyfield.api import wgs84
-from skyfield.api import load, Topos, Loader
+from skyfield.api import load, Topos, Loader, Star, EarthSatellite
 from skyfield.data import hipparcos
+import requests
+
 
 
 # Suppress skyfield warnings about ephemeris files
