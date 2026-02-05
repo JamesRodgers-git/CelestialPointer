@@ -41,8 +41,9 @@ LASER_GEAR_TEETH = 14
 # Gear ratio = output_rotation / motor_shaft_rotation
 # For example: if motor rotates 2x for 1x output rotation, ratio = 0.5
 # If motor rotates 1x for 2x output rotation, ratio = 2.0
-MOTOR1_GEAR_RATIO = .667 / 2  # Motor 1 gear ratio (case rotation). 1.0 = no gearing, <1.0 = reduction, >1.0 = increase
-MOTOR2_GEAR_RATIO = 1.345  # 20/14 = 1.4286:1 (motor rotates 1.4286x per laser gear revolution)
+MOTOR1_GEAR_RATIO = .6665 / 2  # Motor 1 gear ratio (case rotation). 1.0 = no gearing, <1.0 = reduction, >1.0 = increase
+MOTOR2_GEAR_RATIO = 0.645  # 20/14 = 1.4286:1 (motor rotates 1.4286x per laser gear revolution)
+MOTOR2_GEAR_OFFSET_STEPS = 12
 # Legacy: kept for backward compatibility
 GEAR_RATIO = MOTOR2_GEAR_RATIO
 
