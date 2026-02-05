@@ -6,11 +6,11 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, Tuple, List
-from .config import API_HOST, API_PORT, DEFAULT_TARGET, TRACKING_UPDATE_FREQUENCY, TRACKING_ENABLED_BY_DEFAULT, TRACKING_MIN_MOVEMENT_THRESHOLD, USE_DEFAULT_TARGET_ON_STARTUP, USE_MAGNETOMETER_FOR_MOTOR1, SATELLITE_GROUPS, GROUP_TRACKING_STICKY_DURATION
+from .config import API_HOST, API_PORT, DEFAULT_TARGET, TRACKING_UPDATE_FREQUENCY, TRACKING_ENABLED_BY_DEFAULT, TRACKING_MIN_MOVEMENT_THRESHOLD, USE_DEFAULT_TARGET_ON_STARTUP, SATELLITE_GROUPS, GROUP_TRACKING_STICKY_DURATION
 from .target_calculator import TargetCalculator
 from .motor_controller import MotorController
 from .laser_controller import LaserController
-from .imu_controller import IMUController
+from .display_controller import DisplayController
 import math
 import threading
 import time
@@ -58,8 +58,7 @@ class DefaultTarget(BaseModel):
 target_calculator: Optional[TargetCalculator] = None
 motor_controller: Optional[MotorController] = None
 laser_controller: Optional[LaserController] = None
-imu_controller: Optional[IMUController] = None
-body_calibration_controller: Optional[Any] = None  # BodyCalibrationController
+display_controller: Optional[DisplayController] = None
 current_target: Optional[Dict[str, Any]] = None
 default_target: Optional[Dict[str, Any]] = None
 
@@ -73,16 +72,14 @@ sticky_target_time = None  # Time when current target was set (for sticky behavi
 
 
 def initialize_api(calc: TargetCalculator, motor: MotorController,
-                   laser: LaserController, imu: IMUController,
-                   body_calibration: Optional[Any] = None):
+                   laser: LaserController, display: Optional[DisplayController] = None):
     """Initialize API with controller instances."""
-    global target_calculator, motor_controller, laser_controller, imu_controller
-    global default_target, tracking_thread, body_calibration_controller, current_target
+    global target_calculator, motor_controller, laser_controller, display_controller
+    global default_target, tracking_thread, current_target
     target_calculator = calc
     motor_controller = motor
     laser_controller = laser
-    imu_controller = imu
-    body_calibration_controller = body_calibration
+    display_controller = display
     # Set default target from config if specified
     if DEFAULT_TARGET is not None:
         default_target = DEFAULT_TARGET.copy()
@@ -93,24 +90,24 @@ def initialize_api(calc: TargetCalculator, motor: MotorController,
     if TRACKING_ENABLED_BY_DEFAULT:
         _start_tracking_thread()
     
-    # Perform startup calibration if not using magnetometer
-    if not USE_MAGNETOMETER_FOR_MOTOR1:
-        print("\n" + "=" * 60)
-        print("MOTOR 1 HOME CALIBRATION")
-        print("=" * 60)
-        print("\nSince magnetometer is disabled, we need to set motor 1 home position.")
-        print("Please point the laser directly north (magnetic north).")
-        print("When ready, press Enter to set motor 1 home position to 0...")
-        # turn on laser and move down 45 degrees
-        laser_controller.turn_on()
-        motor_controller.move_motor2_degrees(45.0, clockwise=None)
-        input()
-        laser_controller.turn_off()
-        
-        # Reset motor 1 position to 0 (this is now the "north" position)
-        motor_controller.reset_motor1_position()
-        print("✓ Motor 1 home position set to 0 (north)")
-        print("=" * 60 + "\n")
+
+    print("\n" + "=" * 60)
+    print("Laser HOME CALIBRATION")
+    print("=" * 60)
+    display_controller.show_message(line1="point laser north...", line2="10 seconds...")
+    # turn on laser and move down 45 degrees
+    laser_controller.turn_on()
+    motor_controller.move_motor2_degrees(45.0, clockwise=None)
+
+    for i in range(10):
+        display_controller.show_message(line1="Point north...", line2=f"{10 - i} seconds...")
+        time.sleep(1)
+    laser_controller.turn_off()
+    
+    # Reset motor 1 position to 0 (this is now the "north" position)
+    motor_controller.reset_motor1_position()
+    print("✓ Motor 1 home position set to 0 (north)")
+    print("=" * 60 + "\n")
 
 
 def _calculate_default_target_position(default_target: Dict[str, Any]) -> Optional[Tuple[float, float]]:
@@ -336,11 +333,9 @@ def _point_at_body(azimuth: float, elevation: float, update_laser: bool = True) 
     Returns:
         dict: Result information
     """
-    if motor_controller is None or laser_controller is None or imu_controller is None:
+    if motor_controller is None or laser_controller is None:
         raise HTTPException(status_code=500, detail="System not initialized")
     
-    # Get current IMU orientation
-    imu_orientation = imu_controller.get_orientation()
     
     # Calculate relative angles needed
     # Motor 1 controls azimuth (base rotation)
@@ -371,15 +366,7 @@ def _point_at_body(azimuth: float, elevation: float, update_laser: bool = True) 
     current_motor2_angle = motor_controller.get_motor2_angle()
     
     # Motor 1: rotate to azimuth
-    # Get IMU heading (yaw from magnetometer) for body calculation
-    imu_heading = imu_orientation.get('yaw', 0)
     
-    # Calculate body motor angle
-    # Motor 1 angle from get_motor1_angle() = imu_heading + body_offset (if calibrated)
-    # This represents the absolute heading where the base is pointing
-    # To point the laser at azimuth X, we need the base to point at X
-    # So: target_motor_angle = azimuth
-    # The body calibration offset is already accounted for in get_motor1_angle()
     target_motor1_angle = azimuth
     
     motor1_delta = target_motor1_angle - current_motor1_angle
@@ -496,20 +483,13 @@ def root():
 @app.get("/status")
 def get_status():
     """Get current system status."""
-    if motor_controller is None or laser_controller is None or imu_controller is None:
+    if motor_controller is None or laser_controller is None:
         return {"status": "not_initialized"}
     
-    imu_orientation = imu_controller.get_orientation()
     
     with tracking_lock:
         is_trackable = _is_trackable_target(current_target)
-    
-    body_calibration_info = None
-    if body_calibration_controller is not None:
-        body_calibration_info = {
-            "offset": body_calibration_controller.get_offset(),
-            "calibrated": True
-        }
+
     
     return {
         "laser_on": laser_controller.is_on(),
@@ -517,10 +497,8 @@ def get_status():
         "default_target": default_target,
         "tracking_enabled": tracking_enabled,
         "is_trackable": is_trackable,
-        "motor1_angle": imu_controller.get_heading(),
+        "motor1_angle": motor_controller.get_motor1_angle(),
         "motor2_angle": motor_controller.get_motor2_angle(),
-        "imu_orientation": imu_orientation,
-        "body_calibration": body_calibration_info,
         "elevation_range": {
             "min": laser_controller.min_elevation,
             "max": laser_controller.max_elevation

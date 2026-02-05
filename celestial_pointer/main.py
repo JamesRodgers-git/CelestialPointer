@@ -7,13 +7,11 @@ import time
 import RPi.GPIO as GPIO
 from .config import (
     LASER_DEFAULT_MIN_ELEVATION, API_HOST, API_PORT, LOAD_STAR_CHART,
-    USE_MAGNETOMETER_FOR_MOTOR1, USE_DEFAULT_TARGET_ON_STARTUP
+    USE_DEFAULT_TARGET_ON_STARTUP
 )
 from .motor_controller import MotorController
 from .laser_controller import LaserController
-from .imu_controller import IMUController
 from .calibration import CalibrationController
-from .body_calibration import BodyCalibrationController
 from .target_calculator import TargetCalculator
 from .api import initialize_api, run_api
 import argparse
@@ -43,30 +41,16 @@ class CelestialPointer:
         self.laser_controller = LaserController(
             min_elevation=min_elevation if min_elevation is not None else LASER_DEFAULT_MIN_ELEVATION
         )
-        self.imu_controller = IMUController()
-        # Motor controller needs IMU and body calibration for magnetometer-based angle
-        # Only pass IMU if magnetometer is enabled
-        motor1_imu = self.imu_controller if USE_MAGNETOMETER_FOR_MOTOR1 else None
-        self.motor_controller = MotorController(
-            imu_controller=motor1_imu,
-            body_calibration_controller=None  # Will be set after body_calibration_controller is created
-        )
+
+        self.motor_controller = MotorController()
         self.calibration_controller = CalibrationController(
             self.motor_controller,
             self.laser_controller
         )
-        self.body_calibration_controller = BodyCalibrationController(
-            self.motor_controller,
-            self.imu_controller
-        )
-        # Update motor controller with body calibration reference (only if using magnetometer)
-        if USE_MAGNETOMETER_FOR_MOTOR1:
-            self.motor_controller.body_calibration_controller = self.body_calibration_controller
+
         self.target_calculator = TargetCalculator(latitude, longitude, altitude, load_star_chart=LOAD_STAR_CHART)
         
-        # Calibration state
-        self.calibrated = False
-        self.body_calibrated = False
+        self.calibrated = self.calibrate()
         
         print("Initialization complete.")
     
@@ -88,16 +72,6 @@ class CelestialPointer:
         print("\nCalibration complete!")
         return True
     
-    def is_calibrated(self):
-        """Check if system is calibrated."""
-        return self.calibrated
-    
-    def calibrate_body(self):
-        """Perform body calibration (align base rotation with IMU magnetometer)."""
-        success = self.body_calibration_controller.calibrate_body()
-        if success:
-            self.body_calibrated = True
-        return success
     
     def is_body_calibrated(self):
         """Check if body calibration has been performed."""
@@ -110,9 +84,14 @@ class CelestialPointer:
             self.target_calculator,
             self.motor_controller,
             self.laser_controller,
-            self.imu_controller,
-            self.body_calibration_controller
+            self.display_controller
         )
+        
+        # Show IP address on display before ready
+        if self.display_controller:
+            self.display_controller.show_ip_address()
+        
+
         
         print(f"\nStarting API server on {API_HOST}:{API_PORT}")
         print("API documentation available at http://localhost:8000/docs")
@@ -147,22 +126,13 @@ def main():
                        help="Observer altitude in meters (default: 0)")
     parser.add_argument("--min-elevation", type=float, default=None,
                        help="Minimum laser elevation in degrees (default: -10)")
-    parser.add_argument("--calibrate", action="store_true",
-                       help="Run calibration before starting API",
-                       default=True)
-    parser.add_argument("--body-calibrate", action="store_true",
-                       help="Run body calibration (align base rotation with IMU magnetometer)")
-    parser.add_argument("--calibrate-magnetometer", action="store_true",
-                       help="Calibrate magnetometer separately (move device in figure-8 pattern)")
-    parser.add_argument("--skip-calibration", action="store_true",
-                       help="Skip calibration check (use with caution)")
     parser.add_argument("--test-180", action="store_true",
-                       help="Test both motors by rotating exactly 180 degrees")
+                       help="Test both motors by rotating 180 degrees for laser and 360 for body")
     
     args = parser.parse_args()
 
     print("This is the Star Pointer Beta 0.1")
-    print("This project points a laser at stars, planets, satellites using a laser controlled by 2 stepper motors and an IMU for outdoor enjoyment with friends and family.")
+    print("This project points a laser at stars, planets, satellites using a laser controlled by 2 stepper motors for outdoor enjoyment with friends and family.")
     
     try:
         # Create application
@@ -173,24 +143,6 @@ def main():
             min_elevation=args.min_elevation
         )
         
-        # Magnetometer calibrate if requested (can be done independently)
-        if args.calibrate_magnetometer:
-            if not app.imu_controller.calibrate_magnetometer():
-                print("Magnetometer calibration failed. Exiting.")
-                sys.exit(1)
-            # Exit after magnetometer calibration (don't start API)
-            print("\nMagnetometer calibration complete. Exiting.")
-            sys.exit(0)
-        
-        # Body calibrate if requested (can be done independently)
-        if args.body_calibrate:
-            if not app.calibrate_body():
-                print("Body calibration failed. Exiting.")
-                sys.exit(1)
-            # Exit after body calibration (don't start API)
-            print("\nBody calibration complete. Exiting.")
-            sys.exit(0)
-        
         # Test 180 degree rotation if requested
         if args.test_180:
             app.motor_controller.test_180_degree_rotation(laser_controller=app.laser_controller)
@@ -198,12 +150,7 @@ def main():
             app.shutdown()
             sys.exit(0)
         
-        # Calibrate if requested
-        if args.calibrate:
-            if not app.calibrate():
-                print("Calibration failed. Exiting.")
-                sys.exit(1)
-        
+
         # Run API server
         app.run_api_server()
         

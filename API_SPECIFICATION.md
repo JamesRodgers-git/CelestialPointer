@@ -106,15 +106,17 @@ Get current system status.
   "is_trackable": true,
   "motor1_angle": 180.0,
   "motor2_angle": 45.0,
-  "imu_orientation": {
-    "roll": 0.5,
-    "pitch": -1.2,
-    "yaw": 180.0
-  },
-  "body_calibration": {
-    "offset": 0.0,
-    "calibrated": true
+  "elevation_range": {
+    "min": -50.0,
+    "max": 90.0
   }
+}
+```
+
+**Response (if system not initialized):**
+```json
+{
+  "status": "not_initialized"
 }
 ```
 
@@ -251,7 +253,7 @@ Find and track the nearest visible satellite above horizon from configured group
 ### POST `/target/default`
 Point at the currently set default body.
 
-**Response:**
+**Response (for star/planet/satellite/orientation):**
 ```json
 {
   "status": "pointing",

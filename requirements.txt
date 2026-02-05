@@ -4,10 +4,10 @@
 RPi.GPIO>=0.7.1
 RpiMotorLib>=2.0.0
 
-# IMU Support 
-mpu9250-jmdev>=2.0.0
-# mpu9250>=0.1.0
-# mpu6050>=0.1.0
+# LCD Display
+RPLCD>=1.0.0
+smbus2>=0.4.0  # Required for I2C communication on Raspberry Pi
+
 
 # API Framework
 fastapi>=0.104.0

@@ -138,7 +138,6 @@ celestial_pointer/
   ├── config.py              # Configuration constants
   ├── motor_controller.py    # Motor control
   ├── laser_controller.py    # Laser control and range limiting
-  ├── imu_controller.py      # IMU orientation sensing
   ├── calibration.py         # Z-axis calibration
   ├── target_calculator.py   # Astronomy calculations
   ├── api.py                 # REST API server
@@ -147,7 +146,6 @@ celestial_pointer/
 tests/
   ├── test_motor_controller.py
   ├── test_laser_controller.py
-  ├── test_calibration.py
   └── test_target_calculator.py
 ```
 

@@ -64,7 +64,7 @@ class LaserController:
         Check if elevation is within allowed range.
         
         Args:
-            elevation: Elevation angle in degrees (relative to IMU plane)
+            elevation: Elevation angle in degrees (relative to horizontal plane)
             
         Returns:
             tuple: (is_valid, clamped_elevation)

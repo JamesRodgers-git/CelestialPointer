@@ -71,12 +71,12 @@ LASER_FLASH_OFF_DURATION = 0.25  # seconds off
 API_HOST = "0.0.0.0"  # Listen on all interfaces
 API_PORT = 8000
 
-# IMU Settings
-IMU_SAMPLE_RATE = 100  # Hz
-IMU_CALIBRATION_SAMPLES = 1000  # Number of samples for calibration
-IMU_UPSIDE_DOWN = False  # Set to True if IMU is mounted upside down (inverts yaw/heading)
-IMU_ROTATION_OFFSET = 0.0 # offset in degrees due to rotation inside the case
-USE_MAGNETOMETER_FOR_MOTOR1 = False  # Set to True to use magnetometer for motor1 heading (requires good magnetometer signal)
+# Observer Location Settings
+# Default location (can be overridden via command line arguments or API)
+# These values are used if not provided via command line arguments
+OBSERVER_LATITUDE = 37.7749  # Default: San Francisco, CA (degrees)
+OBSERVER_LONGITUDE = -122.4194  # Default: San Francisco, CA (degrees)
+OBSERVER_ALTITUDE = 0.0  # Default altitude in meters
 
 # Body Tracking Settings
 TRACKING_UPDATE_FREQUENCY = 2.0  # Update frequency in Hz (updates per second)
@@ -101,16 +101,6 @@ USE_DEFAULT_TARGET_ON_STARTUP = False  # Set to True to automatically point at d
 #     "target_type": "planet",
 #     "target_value": "Mars"
 #   }'
-
-# Body Calibration Settings
-# Offset between motor 1 (base rotation) and IMU magnetometer heading
-# This is set during body calibration when laser is pointed north
-BODY_CALIBRATION_OFFSET = 0.0  # degrees (motor angle - IMU heading when pointing north)
-BODY_CALIBRATION_FILE = "body_calibration.txt"  # File to save/load calibration
-
-# Magnetometer Calibration Settings
-# Magnetometer calibration (mbias and magScale) is saved separately from accel/gyro calibration
-MAGNETOMETER_CALIBRATION_FILE = "magnetometer_calibration.txt"  # File to save/load magnetometer calibration
 
 # Star Chart Settings
 LOAD_STAR_CHART = True  # Set to False to skip loading star catalog (saves memory and startup time)

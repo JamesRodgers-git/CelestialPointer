@@ -16,25 +16,19 @@ from .config import (
 class MotorController:
     """Controls the two stepper motors for base rotation and laser elevation."""
     
-    def __init__(self, imu_controller=None, body_calibration_controller=None):
+    def __init__(self):
         """
         Initialize motor controller.
         
         Args:
-            imu_controller: IMUController instance (optional, for motor1 magnetometer-based angle)
-            body_calibration_controller: BodyCalibrationController instance (optional, for motor1 offset)
         """
         self.motor1 = RpiMotorLib.BYJMotor("Motor1", "28BYJ")
         self.motor2 = RpiMotorLib.BYJMotor("Motor2", "28BYJ")
 
         # Motor state
         self.motor1_position = 0  # Steps from home (0 = home position) - used for movement only
-        self.motor2_position = 0  # Steps from calibration (0 = 90 degrees relative to IMU)
+        self.motor2_position = 0  # Steps from calibration (0 = 90 degrees relative to horizon)
         
-        # References for magnetometer-based motor1 angle
-        self.imu_controller = imu_controller
-        self.body_calibration_controller = body_calibration_controller
-        self.use_magnetometer_for_motor1 = (imu_controller is not None)
         
         # Threading locks
         self.lock = threading.Lock()
@@ -233,32 +227,9 @@ class MotorController:
     def get_motor1_angle(self):
         """
         Get current motor 1 angle in degrees.
-        
-        If magnetometer is available, uses IMU heading + body calibration offset.
-        Otherwise, falls back to step-based calculation.
         """
-        if self.use_magnetometer_for_motor1 and self.imu_controller is not None:
-            # Use magnetometer heading
-            imu_heading = self.imu_controller.get_heading()
-            
-            # Apply body calibration offset if available
-            if self.body_calibration_controller is not None:
-                body_offset = self.body_calibration_controller.get_offset()
-                motor_angle = imu_heading + body_offset
-            else:
-                motor_angle = imu_heading
-            
-            # Normalize to 0-360
-            while motor_angle < 0:
-                motor_angle += 360
-            while motor_angle >= 360:
-                motor_angle -= 360
-            
-            return motor_angle
-        else:
-            # Fallback to step-based calculation
-            return self.motor1_position * self.motor1_degrees_per_step
 
+        return self.motor1_position * self.motor1_degrees_per_step
         
     
     def get_motor2_angle(self):
@@ -301,7 +272,7 @@ class MotorController:
         Home motor 2 by moving up slowly to the stop button position.
         
         Moves motor 2 upward for LASER_CALIBRATION_STEPS, then resets position to 0.
-        This positions the laser at maximum upward position (~90 degrees relative to IMU).
+        This positions the laser at maximum upward position (~90 degrees relative to horizon).
         
         Args:
             laser_controller: Optional LaserController to turn on/off laser during homing

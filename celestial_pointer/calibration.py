@@ -80,7 +80,7 @@ class CalibrationController:
             self.calibrated = True
             
             print(f"\nCalibration complete! Moved {calibration_steps} steps.")
-            print("Laser is now calibrated at maximum upward position (~90 degrees relative to IMU plane).")
+            print("Laser is now calibrated at maximum upward position (~90 degrees relative to horizontal plane).")
             
             return True
         else:
