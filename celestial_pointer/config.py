@@ -60,7 +60,7 @@ LASER_DEFAULT_MIN_ELEVATION = 20.0
 CALIBRATION_BUTTON_DEBOUNCE = 0.05  # seconds
 CALIBRATION_STEP_DELAY = 0.01  # seconds (faster for more power during calibration)
 CALIBRATION_STEP_TYPE = "half"  # Use full step mode for maximum torque during calibration
-LASER_CALIBRATION_STEPS = 256  # Number of steps to move laser up for calibration
+LASER_CALIBRATION_STEPS = 128  # Number of steps to move laser up for calibration
 
 # Laser Flash Settings (when body is out of range)
 LASER_FLASH_COUNT = 2  # Number of flashes when body below range
