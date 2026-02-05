@@ -51,14 +51,8 @@ class TargetCalculator:
             self.loader = Loader('~/.skyfield-data/')
             
             # Create observer location
-            self.observer_topos = Topos(
-                latitude_degrees=self.latitude,
-                longitude_degrees=self.longitude,
-                elevation_m=self.altitude
-            )
-
-            earth = self.eph['earth']
-            self.observer_wgs84 = earth + wgs84.latlon(self.latitude, self.longitude, elevation_m=self.altitude)
+            self._update_observer_location()
+            
 
             
             # Load star catalog (Hipparcos catalog) if enabled
@@ -81,8 +75,8 @@ class TargetCalculator:
             self.satellites = {}
             self.skyfield_available = True
             
-        except ImportError:
-            print("Warning: Skyfield not available. Install with: pip3 install skyfield")
+        except Exception as e:
+            print(f"Error initializing Skyfield: {e}")
             self.skyfield_available = False
             self.ts = None
             self.eph = None
@@ -90,6 +84,41 @@ class TargetCalculator:
             self.stars_loaded = False
             self.star_catalog = None
             self.satellites = {}
+
+
+    def _update_observer_location(self):
+        """Update the observer location (internal method)."""
+        
+        try:
+            
+            # Create observer location
+            self.observer_topos = Topos(
+                latitude_degrees=self.latitude,
+                longitude_degrees=self.longitude,
+                elevation_m=self.altitude
+            )
+
+            earth = self.eph['earth']
+            self.observer_wgs84 = earth + wgs84.latlon(self.latitude, self.longitude, elevation_m=self.altitude)
+        except Exception as e:
+            print(f"Error updating observer location: {e}")
+    
+    def update_location(self, latitude: float, longitude: float, altitude: float = None):
+        """
+        Update the observer location.
+        
+        Args:
+            latitude: New latitude in degrees
+            longitude: New longitude in degrees
+            altitude: New altitude in meters (optional, keeps current if not provided)
+        """
+        self.latitude = latitude
+        self.longitude = longitude
+        if altitude is not None:
+            self.altitude = altitude
+        
+        # Reinitialize observer location
+        self._update_observer_location()
     
     def _get_altaz(self, astrometric) -> Tuple[float, float]:
         """
@@ -537,8 +566,6 @@ class TargetCalculator:
             return {"loaded": 0, "failed": 0, "satellites": []}
         
         try:
-            from skyfield.api import EarthSatellite, load
-            import requests
             
             url = f'https://celestrak.org/NORAD/elements/gp.php?GROUP={group_name}&FORMAT=tle'
             
