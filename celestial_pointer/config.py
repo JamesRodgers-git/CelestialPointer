@@ -53,8 +53,8 @@ MOTOR_DEFAULT_DELAY = 0.001  # seconds between steps
 
 # Laser Range Limits (in degrees from IMU plane)
 LASER_MAX_ELEVATION = 90.0  # Directly up (degrees)
-LASER_MIN_ELEVATION = -50.0  # 10 degrees below horizontal (default, configurable)
-LASER_DEFAULT_MIN_ELEVATION = -50.0
+LASER_MIN_ELEVATION = 20.0  # e.g. 10 degrees below horizontal (default, configurable)
+LASER_DEFAULT_MIN_ELEVATION = 20.0
 
 # Calibration Settings
 CALIBRATION_BUTTON_DEBOUNCE = 0.05  # seconds
