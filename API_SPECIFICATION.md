@@ -1,6 +1,6 @@
 # Celestial Pointer API Specification
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Base URL:** `http://localhost:8000` (default)  
 **API Type:** RESTful JSON API  
 **Documentation:** Interactive API docs available at `http://localhost:8000/docs`
@@ -14,10 +14,12 @@
 5. [Pointing Endpoints](#pointing-endpoints)
 6. [Laser Control Endpoints](#laser-control-endpoints)
 7. [Default Body Management](#default-body-management)
-8. [Tracking Control](#tracking-control)
-9. [Satellite Management](#satellite-management)
-10. [Error Handling](#error-handling)
-11. [Data Models](#data-models)
+8. [Startup Behavior Control](#startup-behavior-control)
+9. [Location Management](#location-management)
+10. [Tracking Control](#tracking-control)
+11. [Satellite Management](#satellite-management)
+12. [Error Handling](#error-handling)
+13. [Data Models](#data-models)
 
 ---
 
@@ -163,11 +165,11 @@ Point at a star by name or HIP number.
   "azimuth": 180.5,
   "elevation": 45.2,
   "motor1_delta": 5.3,
-  "motor2_delta": -2.1,
-  "star_name": "Sirius",
-  "hip_number": 32349
+  "motor2_delta": -2.1
 }
 ```
+
+**Note:** The star name and HIP number are stored in `current_target` (visible via `/status`), but are not included in this response.
 
 ### POST `/target/planet`
 Point at a planet by name.
@@ -264,7 +266,23 @@ Point at the currently set default body.
 }
 ```
 
+**Response (for group type):**
+```json
+{
+  "status": "pointing",
+  "azimuth": 180.5,
+  "elevation": 45.2,
+  "motor1_delta": 5.3,
+  "motor2_delta": -2.1,
+  "group_tracking": true,
+  "satellite_id": "25544",
+  "sticky_duration": 60.0
+}
+```
+
 **Error:** Returns `404` if no default body is set.
+
+**Note:** When the default body type is "group", this enables group tracking mode automatically, similar to `/target/nearest-group`.
 
 ### POST `/detarget`
 Stop pointing and turn off laser.
@@ -294,8 +312,7 @@ Toggle laser on/off or set specific state.
 **Response:**
 ```json
 {
-  "status": "laser_on",
-  "laser_state": true
+  "laser_on": true
 }
 ```
 
@@ -306,8 +323,10 @@ Get current laser status.
 ```json
 {
   "laser_on": true,
-  "min_elevation": -50.0,
-  "max_elevation": 90.0
+  "elevation_range": {
+    "min": -50.0,
+    "max": 90.0
+  }
 }
 ```
 
@@ -321,10 +340,12 @@ Set a default body that can be activated later.
 **Request Body:**
 ```json
 {
-  "target_type": "satellite",  // "star", "planet", "satellite", "orientation"
-  "target_value": "ISS",      // star name, planet name, satellite ID, or "orientation"
+  "target_type": "satellite",  // "star", "planet", "satellite", "orientation", "group"
+  "target_value": "ISS",      // star name, planet name, satellite ID (not used for "group" or "orientation")
   "azimuth": null,             // required for "orientation" type
-  "elevation": null            // required for "orientation" type
+  "elevation": null,           // required for "orientation" type
+  "groups": null,              // optional, for "group" type: override default groups from config
+  "min_elevation": null        // optional, for "group" type: override minimum elevation
 }
 ```
 
@@ -343,6 +364,31 @@ Set a default body that can be activated later.
   "target_value": "orientation",
   "azimuth": 180.0,
   "elevation": 45.0
+}
+```
+
+**Example for group (nearest visible satellite):**
+```json
+{
+  "target_type": "group"
+}
+```
+
+**Example for group with custom groups and elevation:**
+```json
+{
+  "target_type": "group",
+  "groups": [
+    {
+      "group_name": "stations",
+      "limit": null
+    },
+    {
+      "group_name": "visual",
+      "limit": 50
+    }
+  ],
+  "min_elevation": 10.0
 }
 ```
 
@@ -366,14 +412,16 @@ Get the currently set default body.
   "default_target": {
     "type": "satellite",
     "id": "ISS"
-  }
+  },
+  "has_default": true
 }
 ```
 
 **Response (if no default body):**
 ```json
 {
-  "default_target": null
+  "default_target": null,
+  "has_default": false
 }
 ```
 
@@ -386,6 +434,94 @@ Clear the default body.
   "status": "default_target_cleared"
 }
 ```
+
+---
+
+## Startup Behavior Control
+
+### GET `/startup-behavior`
+Get the current startup behavior configuration.
+
+**Response:**
+```json
+{
+  "use_default_on_startup": false,
+  "has_default_target": true,
+  "default_target": {
+    "type": "group"
+  }
+}
+```
+
+### POST `/startup-behavior`
+Set whether to use the default body on startup.
+
+**Request Body:**
+```json
+{
+  "use_default_on_startup": true  // true = point at default body on startup, false = wait for API input
+}
+```
+
+**Response:**
+```json
+{
+  "status": "startup_behavior_updated",
+  "use_default_on_startup": true
+}
+```
+
+**Note:** This setting can be changed at runtime without restarting the server. When `use_default_on_startup` is `true` and a default body is set, the system will automatically point at the default body after the API server starts. If the default body type is "group", it will find and track the nearest visible satellite from the configured groups.
+
+---
+
+## Location Management
+
+### GET `/location`
+Get the current observer location.
+
+**Response:**
+```json
+{
+  "latitude": 37.7749,
+  "longitude": -122.4194,
+  "altitude": 0.0
+}
+```
+
+### POST `/location`
+Update the observer location (latitude, longitude, and optionally altitude).
+
+**Request Body:**
+```json
+{
+  "latitude": 40.7128,    // Latitude in degrees (-90 to 90)
+  "longitude": -74.0060,  // Longitude in degrees (-180 to 180)
+  "altitude": 0.0         // Altitude in meters (optional)
+}
+```
+
+**Response:**
+```json
+{
+  "status": "location_updated",
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "altitude": 0.0
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request`: Invalid latitude or longitude values (out of range)
+- `409 Conflict`: Device is currently targeting a body (must detarget first)
+- `500 Internal Server Error`: Target calculator not initialized or error updating location
+
+**Note:** 
+- Location changes are saved to `config.py` and persist across restarts
+- The location update immediately affects all target calculations
+- Location cannot be changed while the device is actively targeting a body (to prevent incorrect calculations)
+- Use `POST /detarget` first if you need to change location while targeting
 
 ---
 
@@ -420,15 +556,9 @@ Get current tracking status.
 ```json
 {
   "tracking_enabled": true,
-  "update_frequency": 5.0,
-  "min_movement_threshold": 0.5,
-  "current_target": {
-    "type": "satellite",
-    "id": "25544",
-    "azimuth": 180.5,
-    "elevation": 45.2
-  },
-  "is_trackable": true
+  "tracking_running": true,
+  "current_target_trackable": true,
+  "update_frequency": 2.0
 }
 ```
 
@@ -544,10 +674,31 @@ When `?format=table` is used, returns a plain text formatted table suitable for 
 ### DefaultTarget
 ```typescript
 {
-  target_type: "star" | "planet" | "satellite" | "orientation";
-  target_value: string;
-  azimuth?: number;      // Required for "orientation" type
-  elevation?: number;    // Required for "orientation" type
+  target_type: "star" | "planet" | "satellite" | "orientation" | "group";
+  target_value?: string;  // star name, planet name, satellite ID (not used for "group" or "orientation")
+  azimuth?: number;        // Required for "orientation" type
+  elevation?: number;      // Required for "orientation" type
+  groups?: Array<{         // Optional, for "group" type: override default groups from config
+    group_name: string;
+    limit?: number | null;
+  }>;
+  min_elevation?: number;   // Optional, for "group" type: override minimum elevation
+}
+```
+
+### StartupBehavior
+```typescript
+{
+  use_default_on_startup: boolean;  // Whether to use default body on startup
+}
+```
+
+### LocationUpdate
+```typescript
+{
+  latitude: number;      // Latitude in degrees (-90 to 90)
+  longitude: number;    // Longitude in degrees (-180 to 180)
+  altitude?: number;    // Altitude in meters (optional)
 }
 ```
 
@@ -597,7 +748,7 @@ curl -X POST http://localhost:8000/laser/toggle \
   -d '{"state": null}'
 ```
 
-### Set Default Target
+### Set Default Target (Satellite)
 ```bash
 curl -X POST http://localhost:8000/default-target \
   -H "Content-Type: application/json" \
@@ -605,6 +756,29 @@ curl -X POST http://localhost:8000/default-target \
     "target_type": "satellite",
     "target_value": "ISS"
   }'
+```
+
+### Set Default Target (Nearest Group)
+```bash
+curl -X POST http://localhost:8000/default-target \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_type": "group"
+  }'
+```
+
+### Enable Default Target on Startup
+```bash
+curl -X POST http://localhost:8000/startup-behavior \
+  -H "Content-Type: application/json" \
+  -d '{
+    "use_default_on_startup": true
+  }'
+```
+
+### Get Startup Behavior
+```bash
+curl http://localhost:8000/startup-behavior
 ```
 
 ### Get System Status
@@ -616,17 +790,19 @@ curl http://localhost:8000/status
 
 ## Notes for Frontend Developers
 
-1. **Tracking Updates**: When tracking is enabled, the system automatically updates motor positions at the configured frequency (default: 5 Hz). The frontend should poll `/status` periodically to get current state.
+1. **Tracking Updates**: When tracking is enabled, the system automatically updates motor positions at the configured frequency (default: 2 Hz). The frontend should poll `/status` periodically to get current state.
 
 2. **Motor Movement**: Motor movements may take time to complete. The system prevents overlapping movements, so rapid successive commands may be queued.
 
 3. **Satellite Availability**: Only preloaded satellites are available. Use `GET /satellites` to see what's available. Satellites are preloaded on startup from the "visual" group (100 brightest satellites).
 
-4. **Group Tracking**: The `/target/nearest-group` endpoint enables automatic body switching. The system will stick to a body for a configurable duration (default: 60 seconds) before rechecking for better bodies.
+4. **Group Tracking**: The `/target/nearest-group` endpoint enables automatic body switching. The system will stick to a body for a configurable duration (default: 60 seconds) before rechecking for better bodies. You can also set a default body with type "group" to automatically track the nearest visible satellite.
 
-5. **Error Recovery**: If a target position can't be calculated (e.g., satellite below horizon, network issues), the API will return appropriate error codes. The frontend should handle these gracefully.
+5. **Startup Behavior**: Use `POST /startup-behavior` to configure whether the system should automatically point at the default body on startup. This can be toggled at runtime without restarting the server. When enabled with a "group" type default body, the system will automatically find and track the nearest visible satellite after startup.
 
-6. **Real-time Updates**: For real-time updates, consider using WebSockets or polling `/status` at regular intervals (e.g., every 200-500ms).
+6. **Error Recovery**: If a target position can't be calculated (e.g., satellite below horizon, network issues), the API will return appropriate error codes. The frontend should handle these gracefully.
+
+7. **Real-time Updates**: For real-time updates, consider using WebSockets or polling `/status` at regular intervals (e.g., every 200-500ms).
 
 ---
 
@@ -641,6 +817,18 @@ These provide interactive testing interfaces and detailed schema information.
 ---
 
 ## Version History
+
+- **v1.2** - Location management
+  - Added location management endpoints (`GET/POST /location`)
+  - Location changes are saved to config file and persist across restarts
+  - Location updates immediately affect all target calculations
+  - Location cannot be changed while device is actively targeting (prevents incorrect calculations)
+
+- **v1.1** - Enhanced default body and startup behavior
+  - Added "group" type support for default body (nearest visible satellite tracking)
+  - Added startup behavior control endpoints (`GET/POST /startup-behavior`)
+  - Default body can now be set to automatically track nearest visible satellite from groups
+  - Runtime toggle for using default body on startup (no restart required)
 
 - **v1.0** - Initial API specification
   - All pointing endpoints
