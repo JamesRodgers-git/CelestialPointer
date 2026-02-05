@@ -8,6 +8,9 @@ from datetime import datetime
 from typing import Dict, Optional, Tuple, List, Any
 import warnings
 from skyfield.api import wgs84
+from skyfield.api import load, Topos, Loader
+from skyfield.data import hipparcos
+
 
 # Suppress skyfield warnings about ephemeris files
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -40,8 +43,7 @@ class TargetCalculator:
     def _init_skyfield(self):
         """Initialize Skyfield components."""
         try:
-            from skyfield.api import load, Topos
-            from skyfield.data import hipparcos
+
             
             self.ts = load.timescale()
             self.eph = load('de421.bsp')  # Planetary ephemeris
@@ -173,8 +175,6 @@ class TargetCalculator:
         
         # Try to find star by name in catalog
         try:
-            from skyfield.api import Star
-            
             # Search in star catalog by name (simplified - in production, use proper name resolution)
             if star_key in star_name_map:
                 # Extract HIP number and use it
@@ -216,8 +216,6 @@ class TargetCalculator:
             t = self.ts.from_datetime(time)
         
         try:
-            from skyfield.api import Star
-            
             # Try to load from Hipparcos catalog if available
             if self.stars_loaded and self.star_catalog is not None:
                 try:
@@ -242,9 +240,7 @@ class TargetCalculator:
             
             # Fallback: Try loading star catalog directly
             try:
-                from skyfield.data import hipparcos
-                from skyfield.api import load
-                
+
                 # Load catalog on demand
                 with load.open(hipparcos.URL) as f:
                     df = hipparcos.load_dataframe(f)
@@ -302,8 +298,6 @@ class TargetCalculator:
         
         # Use Skyfield for accurate calculation
         try:
-            from skyfield.api import Star
-            
             ra_hours, dec_degrees = star_catalog[star_key]
             
             # Create star object
@@ -454,8 +448,6 @@ class TargetCalculator:
     def _load_satellite(self, satellite_id: str):
         """Load satellite TLE data from Celestrak."""
         try:
-            from skyfield.api import EarthSatellite, load
-            import requests
             
             # Normalize satellite ID
             original_id = satellite_id

@@ -2,7 +2,6 @@
 Configuration constants for the Celestial Pointer project.
 """
 
-import RPi.GPIO as GPIO
 
 # GPIO Pin Configuration (BCM numbering)
 # Motor 1: Base rotation (physical pins 32, 36, 38, 40)

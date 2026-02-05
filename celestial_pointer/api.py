@@ -14,6 +14,10 @@ from .display_controller import DisplayController
 import math
 import threading
 import time
+import os
+import re
+import random
+import uvicorn
 
 app = FastAPI(title="Celestial Pointer API", version="0.1.0")
 
@@ -1053,11 +1057,10 @@ def startup_event():
 def run_api():
     """Run the API server."""
     try:
-        import uvicorn
         uvicorn.run(app, host=API_HOST, port=API_PORT)
-    except ImportError:
-        raise ImportError("uvicorn is required to run the API server. "
-                         "Install with: pip3 install uvicorn[standard]")
+    except Exception as e:
+        print(f"Error running API server: {e}")
+
     finally:
         # Stop tracking thread on shutdown
         _stop_tracking_thread()
