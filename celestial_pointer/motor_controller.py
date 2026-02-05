@@ -303,12 +303,12 @@ class MotorController:
             if slow_mode:
                 steps_per_batch = 5  # Very small batches for slow, gentle movement
                 delay = CALIBRATION_STEP_DELAY * 2  # Slower delay
-                batch_pause = 0.1  # Brief pause between batches
+                batch_pause = 0.2  # Brief pause between batches
                 progress_interval = 25  # Show progress every 25 steps
             else:
                 steps_per_batch = 10  # Normal batch size
                 delay = CALIBRATION_STEP_DELAY
-                batch_pause = 0.1  # Brief pause between batches
+                batch_pause = 0.2  # Brief pause between batches
                 progress_interval = 50  # Show progress every 50 steps
             
             total_batches = calibration_steps // steps_per_batch
