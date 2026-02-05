@@ -23,6 +23,9 @@ A Raspberry Pi-based device that points a laser at stars, planets, satellites.
 - .3mf files for 3d printing included - SPBeta.3mf
 
 <img src="assets/Screenshot 2026-01-18 at 7.52.44 PM.png" alt="Celestial Pointer model" width="400">
+<img src="assets/Screenshot 2026-02-05 at 10.11.56 AM.png" alt="Celestial Pointer model view 2" width="400">
+<img src="assets/Screenshot 2026-02-05 at 10.47.00 AM.png" alt="Celestial Pointer arranged" width="400">
+
 <img src="assets/img_2.jpg" alt="Celestial Pointer at night" width="400">
 
 # Attribution
